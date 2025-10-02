@@ -110,7 +110,7 @@ io.on('connection', (socket) => {
     if (!room) return;
 
     const player = room.players.find(p => p.id === socket.id);
-    if (!player || player.buzzed) return;
+    if (!player || player.buzzed || player.isHost) return;
 
     const buzzTime = Date.now();
 
@@ -162,41 +162,6 @@ io.on('connection', (socket) => {
 
     io.to(roomCode).emit('buzzers_reset');
     console.log(`Buzzers reset in room ${roomCode}`);
-  });
-
-  socket.on('new_game', (roomCode) => {
-    const room = rooms.get(roomCode);
-    if (!room) return;
-
-    const host = room.players.find(p => p.id === socket.id);
-    if (!host || !host.isHost) return;
-
-    // Reset game state and scores
-    room.gameState = 'waiting';
-    room.players.forEach(p => {
-      p.buzzed = false;
-      p.buzzTime = null;
-      p.score = 0;
-      // Reset TypeRoom specific player states
-      p.answered = false;
-      p.answerTime = null;
-    });
-    room.buzzOrder = [];
-    room.firstBuzzTime = null;
-
-    // Reset TypeRoom specific states
-    if (room.type === 'type') {
-      room.currentQuestion = null;
-      room.currentQuestionIndex = -1;
-      room.answerLog = [];
-    }
-
-    io.to(roomCode).emit('new_game_started', {
-      gameState: room.gameState,
-      players: room.players
-    });
-
-    console.log(`New game started in room ${roomCode}`);
   });
 
   // Type room specific events
@@ -419,6 +384,18 @@ io.on('connection', (socket) => {
 
     room.gameState = 'active';
 
+    // Reset buzzers when starting game (for buzzer rooms)
+    if (room.type === 'buzzer') {
+      room.players.forEach(p => {
+        p.buzzed = false;
+        p.buzzTime = null;
+      });
+      room.buzzOrder = [];
+      room.firstBuzzTime = null;
+
+      io.to(roomCode).emit('buzzers_reset');
+    }
+
     io.to(roomCode).emit('game_started', {
       gameState: room.gameState
     });
@@ -435,8 +412,10 @@ io.on('connection', (socket) => {
 
     room.gameState = 'ended';
 
-    // Sort players by score for podium
-    const sortedPlayers = [...room.players].sort((a, b) => b.score - a.score);
+    // Sort players by score for podium, excluding the host
+    const sortedPlayers = [...room.players]
+      .filter(p => !p.isHost)
+      .sort((a, b) => b.score - a.score);
     const topPlayers = sortedPlayers.slice(0, 3);
 
     io.to(roomCode).emit('game_ended', {

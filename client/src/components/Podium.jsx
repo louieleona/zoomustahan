@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-function Podium({ topPlayers, onNewGame }) {
+function Podium({ topPlayers, onBackToHome }) {
   const [animationStage, setAnimationStage] = useState(0);
 
   useEffect(() => {
@@ -113,14 +113,12 @@ function Podium({ topPlayers, onNewGame }) {
         </div>
       </div>
 
-      {onNewGame && (
-        <button
-          onClick={onNewGame}
-          className="mt-8 bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-8 rounded-lg shadow-lg transition duration-200 animate-pulse"
-        >
-          Start New Game
-        </button>
-      )}
+      <button
+        onClick={onBackToHome}
+        className="mt-8 bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-8 rounded-lg shadow-lg transition duration-200"
+      >
+        Back to Home
+      </button>
     </div>
   );
 }

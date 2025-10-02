@@ -20,7 +20,7 @@ function Room() {
 
   useEffect(() => {
     if (!player || !roomCode) {
-      navigate('/');
+      navigate(`/join/${roomCode}`);
       return;
     }
 
@@ -73,16 +73,6 @@ function Room() {
       setTopPlayers(topPlayers);
     });
 
-    socket.on('new_game_started', ({ gameState, players }) => {
-      setGameState(gameState);
-      setPlayers(players);
-      setTopPlayers([]);
-      setBuzzOrder([]);
-      setPlayerBuzzed(false);
-      setRoundActive(true);
-      setMarkedPlayers(new Set());
-    });
-
     return () => {
       socket.off('player_joined');
       socket.off('player_left');
@@ -91,7 +81,6 @@ function Room() {
       socket.off('answer_marked');
       socket.off('game_started');
       socket.off('game_ended');
-      socket.off('new_game_started');
     };
   }, [player, roomCode, navigate]);
 
@@ -124,11 +113,6 @@ function Room() {
     socket.emit('end_game', roomCode);
   };
 
-  const handleNewGame = () => {
-    if (!player.isHost) return;
-    socket.emit('new_game', roomCode);
-  };
-
   const handleLeaveRoom = () => {
     socket.disconnect();
     navigate('/');
@@ -143,7 +127,7 @@ function Room() {
     return (
       <Podium
         topPlayers={topPlayers}
-        onNewGame={player.isHost ? handleNewGame : undefined}
+        onBackToHome={handleLeaveRoom}
       />
     );
   }
@@ -170,8 +154,9 @@ function Room() {
               <div className="flex items-center space-x-3 mb-2">
                 <h1 className="text-2xl font-bold text-gray-800">Room: {roomCode}</h1>
                 <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(roomCode);
+                  onClick={(event) => {
+                    const roomUrl = `${window.location.origin}/join/${roomCode}`;
+                    navigator.clipboard.writeText(roomUrl);
                     // Optional: Show a brief success message
                     const button = event.target;
                     const originalText = button.textContent;
@@ -181,7 +166,7 @@ function Room() {
                     }, 1000);
                   }}
                   className="bg-gray-200 hover:bg-gray-300 text-gray-700 p-2 rounded-md transition duration-200"
-                  title="Copy room code"
+                  title="Copy room link"
                 >
                   📋
                 </button>
@@ -238,17 +223,23 @@ function Room() {
             <div className="lg:col-span-7 space-y-6">
               {/* Buzzer Section */}
               <div className="text-center">
-                <button
-                  onClick={handleBuzz}
-                  disabled={playerBuzzed}
-                  className={`w-48 h-48 rounded-full text-white font-bold text-2xl transition duration-200 ${
-                    playerBuzzed
-                      ? 'bg-red-500 cursor-not-allowed'
-                      : 'bg-yellow-500 hover:bg-yellow-600 active:scale-95 shadow-lg hover:shadow-xl'
-                  }`}
-                >
-                  {playerBuzzed ? 'BUZZED!' : 'BUZZ'}
-                </button>
+                {!player.isHost ? (
+                  <button
+                    onClick={handleBuzz}
+                    disabled={playerBuzzed}
+                    className={`w-48 h-48 rounded-full text-white font-bold text-2xl transition duration-200 ${
+                      playerBuzzed
+                        ? 'bg-red-500 cursor-not-allowed'
+                        : 'bg-yellow-500 hover:bg-yellow-600 active:scale-95 shadow-lg hover:shadow-xl'
+                    }`}
+                  >
+                    {playerBuzzed ? 'BUZZED!' : 'BUZZ'}
+                  </button>
+                ) : (
+                  <div className="w-48 h-48 mx-auto flex items-center justify-center bg-gray-200 rounded-full text-gray-500 font-medium text-center p-6">
+                    Host cannot buzz
+                  </div>
+                )}
               </div>
 
               {player.isHost && (

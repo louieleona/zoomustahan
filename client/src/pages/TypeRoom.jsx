@@ -101,18 +101,6 @@ function TypeRoom({ roomCode, player, players: initialPlayers, gameState, onLeav
       setTopPlayers(topPlayers);
     });
 
-    socket.on('new_game_started', ({ gameState, players }) => {
-      // Reset TypeRoom specific states
-      setCurrentQuestion(null);
-      setCurrentQuestionIndex(-1);
-      setPlayerAnswer('');
-      setHasAnswered(false);
-      setFeedback(null);
-      setAnswerLog([]);
-      setTopPlayers([]);
-      setPlayers(players);
-    });
-
     return () => {
       socket.off('question_added');
       socket.off('question_updated');
@@ -125,7 +113,6 @@ function TypeRoom({ roomCode, player, players: initialPlayers, gameState, onLeav
       socket.off('incorrect_answer');
       socket.off('game_started');
       socket.off('game_ended');
-      socket.off('new_game_started');
     };
   }, []);
 
@@ -217,16 +204,12 @@ function TypeRoom({ roomCode, player, players: initialPlayers, gameState, onLeav
     socket.emit('end_game', roomCode);
   };
 
-  const handleNewGame = () => {
-    socket.emit('new_game', roomCode);
-  };
-
   // Show podium if game has ended
   if (gameState === 'ended') {
     return (
       <Podium
         topPlayers={topPlayers}
-        onNewGame={player.isHost ? handleNewGame : undefined}
+        onBackToHome={onLeaveRoom}
       />
     );
   }
@@ -238,7 +221,25 @@ function TypeRoom({ roomCode, player, players: initialPlayers, gameState, onLeav
           {/* Header */}
           <div className="flex justify-between items-center mb-6">
             <div>
-              <h1 className="text-2xl font-bold text-gray-800">⌨️ Type Room: {roomCode}</h1>
+              <div className="flex items-center space-x-3 mb-2">
+                <h1 className="text-2xl font-bold text-gray-800">Room: {roomCode}</h1>
+                <button
+                  onClick={(event) => {
+                    const roomUrl = `${window.location.origin}/join/${roomCode}`;
+                    navigator.clipboard.writeText(roomUrl);
+                    const button = event.target;
+                    const originalText = button.textContent;
+                    button.textContent = '✓';
+                    setTimeout(() => {
+                      button.textContent = originalText;
+                    }, 1000);
+                  }}
+                  className="bg-gray-200 hover:bg-gray-300 text-gray-700 p-2 rounded-md transition duration-200"
+                  title="Copy room link"
+                >
+                  📋
+                </button>
+              </div>
               <p className="text-gray-600">
                 Playing as: <span className="font-semibold">{player.name}</span>
                 {player.isHost && <span className="ml-2 text-purple-600">(Host)</span>}
