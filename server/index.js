@@ -5,14 +5,20 @@ const cors = require('cors');
 
 const app = express();
 const server = http.createServer(app);
+
+const allowedOrigin = process.env.CLIENT_URL || "http://localhost:5173";
+
 const io = socketIo(server, {
   cors: {
-    origin: process.env.CLIENT_URL || "http://localhost:5173",
+    origin: allowedOrigin,
     methods: ["GET", "POST"]
   }
 });
 
-app.use(cors());
+app.use(cors({
+  origin: allowedOrigin,
+  methods: ["GET", "POST"]
+}));
 app.use(express.json());
 
 const rooms = new Map();
@@ -476,4 +482,5 @@ io.on('connection', (socket) => {
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  console.log(`CORS enabled for origin: ${allowedOrigin}`);
 });
