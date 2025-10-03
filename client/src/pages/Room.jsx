@@ -96,6 +96,13 @@ function Room() {
 
   const handleMarkAnswer = (playerId, correct) => {
     if (!player.isHost) return;
+
+    // Only allow marking the next player in buzz order
+    const nextUnmarkedPlayer = buzzOrder.find(p => !markedPlayers.has(p.id));
+    if (!nextUnmarkedPlayer || nextUnmarkedPlayer.id !== playerId) {
+      return; // Not the next player to be validated
+    }
+
     socket.emit('mark_answer', {
       roomCode,
       playerId,
@@ -257,42 +264,77 @@ function Room() {
               {buzzOrder.length > 0 && (
                 <div>
                   <h2 className="text-xl font-semibold mb-4">Buzz Order</h2>
+                  {player.isHost && gameState === 'active' && (
+                    <p className="text-sm text-gray-600 mb-3">
+                      Validate answers in order, starting from the fastest buzzer
+                    </p>
+                  )}
                   <div className="space-y-2">
-                    {buzzOrder.map((p, index) => (
-                      <div
-                        key={p.id}
-                        className="flex items-center justify-between p-3 bg-yellow-100 border border-yellow-300 rounded-md"
-                      >
-                        <div className="flex items-center space-x-3">
-                          <span className="font-medium">
-                            #{p.position} - {p.name}
-                          </span>
-                          <span className="text-sm text-gray-600">
-                            {p.timeDiff === 0 ? '0ms' : `+${(p.timeDiff / 1000).toFixed(3)}s`}
-                          </span>
+                    {buzzOrder.map((p, index) => {
+                      const isMarked = markedPlayers.has(p.id);
+                      const nextUnmarkedPlayer = buzzOrder.find(player => !markedPlayers.has(player.id));
+                      const isNextToValidate = nextUnmarkedPlayer && nextUnmarkedPlayer.id === p.id;
+
+                      return (
+                        <div
+                          key={p.id}
+                          className={`flex items-center justify-between p-3 rounded-md border-2 transition-all ${
+                            isMarked
+                              ? 'bg-gray-100 border-gray-300 opacity-60'
+                              : isNextToValidate && player.isHost && gameState === 'active' && roundActive
+                              ? 'bg-yellow-100 border-yellow-500 shadow-md'
+                              : 'bg-yellow-50 border-yellow-300'
+                          }`}
+                        >
+                          <div className="flex items-center space-x-3">
+                            <span className="font-medium">
+                              #{p.position} - {p.name}
+                            </span>
+                            <span className="text-sm text-gray-600">
+                              {p.timeDiff === 0 ? '0ms' : `+${(p.timeDiff / 1000).toFixed(3)}s`}
+                            </span>
+                            {isNextToValidate && player.isHost && gameState === 'active' && roundActive && (
+                              <span className="text-xs bg-blue-500 text-white px-2 py-1 rounded-full">
+                                Validate Now
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            {player.isHost && gameState === 'active' && roundActive && !isMarked && (
+                              <div className="flex space-x-1">
+                                <button
+                                  onClick={() => handleMarkAnswer(p.id, true)}
+                                  disabled={!isNextToValidate}
+                                  className={`w-8 h-8 rounded-full flex items-center justify-center transition duration-200 ${
+                                    isNextToValidate
+                                      ? 'bg-green-500 hover:bg-green-600 text-white cursor-pointer'
+                                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                  }`}
+                                  title={isNextToValidate ? 'Mark Correct' : 'Wait for previous answers first'}
+                                >
+                                  ✓
+                                </button>
+                                <button
+                                  onClick={() => handleMarkAnswer(p.id, false)}
+                                  disabled={!isNextToValidate}
+                                  className={`w-8 h-8 rounded-full flex items-center justify-center transition duration-200 ${
+                                    isNextToValidate
+                                      ? 'bg-red-500 hover:bg-red-600 text-white cursor-pointer'
+                                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                  }`}
+                                  title={isNextToValidate ? 'Mark Incorrect' : 'Wait for previous answers first'}
+                                >
+                                  ✗
+                                </button>
+                              </div>
+                            )}
+                            {isMarked && (
+                              <span className="text-sm text-gray-500">✓ Validated</span>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex items-center space-x-2">
-                          {player.isHost && gameState === 'active' && roundActive && !markedPlayers.has(p.id) && (
-                            <div className="flex space-x-1">
-                              <button
-                                onClick={() => handleMarkAnswer(p.id, true)}
-                                className="bg-green-500 hover:bg-green-600 text-white w-8 h-8 rounded-full flex items-center justify-center transition duration-200"
-                                title="Mark Correct"
-                              >
-                                ✓
-                              </button>
-                              <button
-                                onClick={() => handleMarkAnswer(p.id, false)}
-                                className="bg-red-500 hover:bg-red-600 text-white w-8 h-8 rounded-full flex items-center justify-center transition duration-200"
-                                title="Mark Incorrect"
-                              >
-                                ✗
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
