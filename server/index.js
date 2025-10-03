@@ -27,6 +27,28 @@ function generateRoomCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
+function logScoreTally(roomCode, event, room) {
+  console.log('\n========== SCORE TALLY ==========');
+  console.log(`Room: ${roomCode}`);
+  console.log(`Event: ${event}`);
+  console.log(`Timestamp: ${new Date().toISOString()}`);
+  console.log(`Room Type: ${room.type}`);
+  console.log(`Game State: ${room.gameState}`);
+
+  if (room.type === 'type' && room.currentQuestionIndex >= 0) {
+    console.log(`Question: ${room.currentQuestionIndex + 1}/${room.questions.length}`);
+  }
+
+  console.log('\nPlayer Scores:');
+  room.players.forEach((player, index) => {
+    console.log(`  ${index + 1}. ${player.name}${player.isHost ? ' (Host)' : ''}: ${player.score} points`);
+  });
+
+  const totalPoints = room.players.reduce((sum, p) => sum + p.score, 0);
+  console.log(`\nTotal Points Distributed: ${totalPoints}`);
+  console.log('=================================\n');
+}
+
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
 
@@ -153,6 +175,9 @@ io.on('connection', (socket) => {
     const player = room.players.find(p => p.id === socket.id);
     if (!player || !player.isHost) return;
 
+    // Log score tally before resetting
+    logScoreTally(roomCode, 'Buzzer Reset', room);
+
     room.players.forEach(p => {
       p.buzzed = false;
       p.buzzTime = null;
@@ -240,6 +265,11 @@ io.on('connection', (socket) => {
     if (!host || !host.isHost) return;
 
     if (questionIndex < 0 || questionIndex >= room.questions.length) return;
+
+    // Log score tally before starting new question (except for first question)
+    if (questionIndex > 0 || room.currentQuestionIndex >= 0) {
+      logScoreTally(roomCode, `Starting Question ${questionIndex + 1}`, room);
+    }
 
     room.currentQuestion = room.questions[questionIndex];
     room.currentQuestionIndex = questionIndex;
@@ -409,6 +439,9 @@ io.on('connection', (socket) => {
 
     const host = room.players.find(p => p.id === socket.id);
     if (!host || !host.isHost) return;
+
+    // Log final score tally
+    logScoreTally(roomCode, 'Game Ended - Final Scores', room);
 
     room.gameState = 'ended';
 
