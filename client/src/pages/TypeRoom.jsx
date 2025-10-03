@@ -19,6 +19,8 @@ function TypeRoom({ roomCode, player, players: initialPlayers, gameState, onLeav
   const [answerLog, setAnswerLog] = useState([]);
   const [topPlayers, setTopPlayers] = useState([]);
   const inputRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const [uploadError, setUploadError] = useState(null);
 
   useEffect(() => {
     socket.on('question_added', ({ questions }) => {
@@ -204,6 +206,127 @@ function TypeRoom({ roomCode, player, players: initialPlayers, gameState, onLeav
     socket.emit('end_game', roomCode);
   };
 
+  const handleFileUpload = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    setUploadError(null);
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+      try {
+        const content = e.target.result;
+        const parsedQuestions = parseFileContent(content, file.name);
+
+        if (parsedQuestions.length === 0) {
+          setUploadError('No valid questions found in the file');
+          return;
+        }
+
+        // Add all parsed questions
+        parsedQuestions.forEach(({ question, answer }) => {
+          socket.emit('add_question', {
+            roomCode,
+            question: question.trim(),
+            answer: answer.trim()
+          });
+        });
+
+        setUploadError(null);
+        // Reset file input
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      } catch (error) {
+        setUploadError(error.message);
+      }
+    };
+
+    reader.onerror = () => {
+      setUploadError('Failed to read file');
+    };
+
+    reader.readAsText(file);
+  };
+
+  const parseFileContent = (content, filename) => {
+    const questions = [];
+
+    // Detect file type
+    if (filename.endsWith('.json')) {
+      // JSON format: [{"question": "...", "answer": "..."}, ...]
+      const data = JSON.parse(content);
+      if (!Array.isArray(data)) {
+        throw new Error('JSON must be an array of question objects');
+      }
+      data.forEach((item, index) => {
+        if (!item.question || !item.answer) {
+          throw new Error(`Invalid format at index ${index}: missing question or answer`);
+        }
+        questions.push({ question: item.question, answer: item.answer });
+      });
+    } else if (filename.endsWith('.csv')) {
+      // CSV format: question,answer (with optional header)
+      const lines = content.split('\n').filter(line => line.trim());
+      lines.forEach((line, index) => {
+        // Skip header row if it looks like a header
+        if (index === 0 && (line.toLowerCase().includes('question') || line.toLowerCase().includes('answer'))) {
+          return;
+        }
+
+        // Split by comma, but respect quoted strings
+        const parts = line.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g);
+        if (!parts || parts.length < 2) {
+          return; // Skip invalid lines
+        }
+
+        const question = parts[0].replace(/^"|"$/g, '').trim();
+        const answer = parts[1].replace(/^"|"$/g, '').trim();
+
+        if (question && answer) {
+          questions.push({ question, answer });
+        }
+      });
+    } else {
+      // Plain text format: Q: ... A: ... or question|answer or question\tanswer
+      const lines = content.split('\n').filter(line => line.trim());
+      lines.forEach((line) => {
+        let question, answer;
+
+        // Format 1: Q: question A: answer
+        if (line.match(/Q:\s*.+\s+A:\s*.+/i)) {
+          const match = line.match(/Q:\s*(.+?)\s+A:\s*(.+)/i);
+          if (match) {
+            question = match[1].trim();
+            answer = match[2].trim();
+          }
+        }
+        // Format 2: question|answer
+        else if (line.includes('|')) {
+          const parts = line.split('|');
+          if (parts.length >= 2) {
+            question = parts[0].trim();
+            answer = parts[1].trim();
+          }
+        }
+        // Format 3: question\tanswer (tab-separated)
+        else if (line.includes('\t')) {
+          const parts = line.split('\t');
+          if (parts.length >= 2) {
+            question = parts[0].trim();
+            answer = parts[1].trim();
+          }
+        }
+
+        if (question && answer) {
+          questions.push({ question, answer });
+        }
+      });
+    }
+
+    return questions;
+  };
+
   // Show podium if game has ended
   if (gameState === 'ended') {
     return (
@@ -314,8 +437,43 @@ function TypeRoom({ roomCode, player, players: initialPlayers, gameState, onLeav
                   {/* Question Setup (before/after game) */}
                   {gameState !== 'active' && (
                     <div className="bg-purple-50 border border-purple-200 rounded-lg p-6">
-                      <h3 className="text-lg font-bold text-purple-800 mb-4">Add New Question</h3>
+                      <h3 className="text-lg font-bold text-purple-800 mb-4">Add Questions</h3>
+
+                      {/* File Upload Section */}
+                      <div className="mb-6 p-4 bg-white rounded-lg border border-purple-300">
+                        <h4 className="text-sm font-semibold text-purple-700 mb-2">Upload Questions File</h4>
+                        <p className="text-xs text-gray-600 mb-3">
+                          Upload CSV, JSON, or TXT file. Supported formats:
+                        </p>
+                        <ul className="text-xs text-gray-500 mb-3 ml-4 space-y-1">
+                          <li>• <span className="font-mono">CSV:</span> question,answer</li>
+                          <li>• <span className="font-mono">JSON:</span> [{"{"}"question":"...","answer":"..."{"}"}]</li>
+                          <li>• <span className="font-mono">TXT:</span> Q: ... A: ... or question|answer or question[TAB]answer</li>
+                        </ul>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept=".csv,.json,.txt"
+                          onChange={handleFileUpload}
+                          className="hidden"
+                          id="question-file-upload"
+                        />
+                        <label
+                          htmlFor="question-file-upload"
+                          className="block w-full bg-purple-600 hover:bg-purple-700 text-white text-center font-medium py-2 px-4 rounded-md cursor-pointer transition duration-200"
+                        >
+                          📁 Upload File
+                        </label>
+                        {uploadError && (
+                          <div className="mt-2 p-2 bg-red-100 border border-red-300 text-red-700 text-xs rounded">
+                            {uploadError}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Manual Add Section */}
                       <div className="space-y-4">
+                        <h4 className="text-sm font-semibold text-purple-700">Or Add Manually</h4>
                         <input
                           type="text"
                           value={newQuestion}

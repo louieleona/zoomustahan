@@ -113,7 +113,9 @@ Client runs on `http://localhost:5174`
 ### Type Room
 
 **Host:**
-- Add questions and answers before starting
+- Add questions and answers before starting:
+  - **Manually**: Enter questions one-by-one
+  - **Bulk Upload**: Upload CSV, JSON, or TXT files with multiple questions
 - Click "Start Game" to begin
 - Click "Show Question" to display each question
 - Points awarded automatically to fastest correct answer
@@ -171,13 +173,51 @@ npm start        # Start production server
 
 ### Question Management
 - Add/edit/delete questions before game starts
+- **Bulk Upload**: Import questions from files
+  - **CSV format**: `question,answer`
+  - **JSON format**: `[{"question":"...","answer":"..."}]`
+  - **TXT format**: `Q: question A: answer`, `question|answer`, or `question[TAB]answer`
 - Host-only permissions
 - Real-time sync across all players
+- All questions stored in memory (no database required)
 
 ### Game States
 - **Waiting**: Players join, host prepares
 - **Active**: Points awarded for correct answers
 - **Ended**: Podium display with top 3 winners
+
+## File Upload Examples
+
+### CSV File (`questions.csv`)
+```csv
+question,answer
+What is 2+2?,4
+Capital of France?,Paris
+Largest planet in solar system?,Jupiter
+```
+
+### JSON File (`questions.json`)
+```json
+[
+  {"question": "What is 2+2?", "answer": "4"},
+  {"question": "Capital of France?", "answer": "Paris"},
+  {"question": "Largest planet in solar system?", "answer": "Jupiter"}
+]
+```
+
+### TXT File (`questions.txt`)
+```
+Q: What is 2+2? A: 4
+Q: Capital of France? A: Paris
+Q: Largest planet in solar system? A: Jupiter
+```
+
+Or pipe-separated:
+```
+What is 2+2?|4
+Capital of France?|Paris
+Largest planet in solar system?|Jupiter
+```
 
 ## Future Enhancements
 
@@ -188,7 +228,6 @@ npm start        # Start production server
 - Mobile app version
 - Password-protected rooms
 - Spectator mode
-- Question import/export
 - Multi-game leaderboards
 
 ## License
