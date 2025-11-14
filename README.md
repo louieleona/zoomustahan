@@ -169,14 +169,18 @@ npm start        # Start production server
 ### Answer Validation (Type Room)
 - Case-insensitive matching: "paris" = "PARIS" = "Paris"
 - Multiple valid answers: "usa/america" or "usa or america"
+- Numeric comparison for amount type: "34.5" = "34.50" = "34.500"
 - Exact match required (no partial credit)
 
 ### Question Management
 - Add/edit/delete questions before game starts
+- **Answer Types** (optional, defaults to "text"): Choose between "text" or "amount" (numeric) answers
+  - Text: Traditional text-based answers (default)
+  - Amount: Shows numeric keypad on mobile devices
 - **Bulk Upload**: Import questions from files
-  - **CSV format**: `question,answer`
-  - **JSON format**: `[{"question":"...","answer":"..."}]`
-  - **TXT format**: `Q: question A: answer`, `question|answer`, or `question[TAB]answer`
+  - **CSV format**: `question,answer` or `question,answer,answerType` (answerType is optional)
+  - **JSON format**: `[{"question":"...","answer":"...","answerType":"text|amount"}]` (answerType is optional)
+  - **TXT format**: `Q: question A: answer`, `question|answer`, or `question[TAB]answer` (text type only)
 - Host-only permissions
 - Real-time sync across all players
 - All questions stored in memory (no database required)
@@ -189,6 +193,7 @@ npm start        # Start production server
 ## File Upload Examples
 
 ### CSV File (`questions.csv`)
+**Basic format (defaults to text type):**
 ```csv
 question,answer
 What is 2+2?,4
@@ -196,7 +201,26 @@ Capital of France?,Paris
 Largest planet in solar system?,Jupiter
 ```
 
+**With answer type (optional third column):**
+```csv
+question,answer,answerType
+What is 2+2?,4,amount
+Capital of France?,Paris,text
+What is the price?,34.50,amount
+```
+
+**Mixed format (some with answerType, some without):**
+```csv
+question,answer,answerType
+What is 2+2?,4,amount
+Capital of France?,Paris
+What is the price?,34.50,amount
+Largest planet?,Jupiter
+```
+*Note: Rows without answerType (like "Capital of France?" and "Largest planet?") automatically default to text type.*
+
 ### JSON File (`questions.json`)
+**Basic format (defaults to text type):**
 ```json
 [
   {"question": "What is 2+2?", "answer": "4"},
@@ -205,7 +229,29 @@ Largest planet in solar system?,Jupiter
 ]
 ```
 
+**With answer type (optional field):**
+```json
+[
+  {"question": "What is 2+2?", "answer": "4", "answerType": "amount"},
+  {"question": "Capital of France?", "answer": "Paris", "answerType": "text"},
+  {"question": "What is the price?", "answer": "34.50", "answerType": "amount"}
+]
+```
+
+**Mixed format (some with answerType, some without):**
+```json
+[
+  {"question": "What is 2+2?", "answer": "4", "answerType": "amount"},
+  {"question": "Capital of France?", "answer": "Paris"},
+  {"question": "What is the price?", "answer": "34.50", "answerType": "amount"},
+  {"question": "Largest planet?", "answer": "Jupiter"}
+]
+```
+*Note: Objects without answerType field (like "Capital of France?" and "Largest planet?") automatically default to text type.*
+
 ### TXT File (`questions.txt`)
+**TXT files always default to text type**
+
 ```
 Q: What is 2+2? A: 4
 Q: Capital of France? A: Paris
