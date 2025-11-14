@@ -22,6 +22,7 @@ app.use(cors({
 app.use(express.json());
 
 const rooms = new Map();
+let questionIdCounter = 0; // Global counter for unique question IDs
 
 function generateRoomCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -190,17 +191,20 @@ io.on('connection', (socket) => {
   });
 
   // Type room specific events
-  socket.on('add_question', ({ roomCode, question, answer }) => {
+  socket.on('add_question', ({ roomCode, question, answer, answerType }) => {
     const room = rooms.get(roomCode);
     if (!room || room.type !== 'type') return;
 
     const host = room.players.find(p => p.id === socket.id);
     if (!host || !host.isHost) return;
 
+    // Use counter + timestamp to ensure unique IDs even for rapid uploads
+    questionIdCounter++;
     const newQuestion = {
-      id: Date.now(),
+      id: Date.now() + questionIdCounter,
       question: question.trim(),
-      answer: answer.trim().toLowerCase()
+      answer: answer.trim().toLowerCase(),
+      answerType: answerType || 'text' // default to text if not provided
     };
 
     room.questions.push(newQuestion);
@@ -212,7 +216,7 @@ io.on('connection', (socket) => {
     console.log(`Question added to room ${roomCode}: ${question}`);
   });
 
-  socket.on('update_question', ({ roomCode, questionId, question, answer }) => {
+  socket.on('update_question', ({ roomCode, questionId, question, answer, answerType }) => {
     const room = rooms.get(roomCode);
     if (!room || room.type !== 'type') return;
 
@@ -228,7 +232,8 @@ io.on('connection', (socket) => {
     room.questions[questionIndex] = {
       ...room.questions[questionIndex],
       question: question.trim(),
-      answer: answer.trim().toLowerCase()
+      answer: answer.trim().toLowerCase(),
+      answerType: answerType || 'text' // default to text if not provided
     };
 
     socket.emit('question_updated', {
@@ -255,6 +260,25 @@ io.on('connection', (socket) => {
     });
 
     console.log(`Question deleted from room ${roomCode}`);
+  });
+
+  socket.on('clear_questions', ({ roomCode }) => {
+    const room = rooms.get(roomCode);
+    if (!room || room.type !== 'type') return;
+
+    const host = room.players.find(p => p.id === socket.id);
+    if (!host || !host.isHost) return;
+
+    // Only allow clearing if game hasn't started
+    if (room.gameState === 'active') return;
+
+    room.questions = [];
+
+    socket.emit('questions_cleared', {
+      questions: room.questions
+    });
+
+    console.log(`All questions cleared from room ${roomCode}`);
   });
 
   socket.on('start_question', ({ roomCode, questionIndex }) => {
@@ -286,7 +310,8 @@ io.on('connection', (socket) => {
     io.to(roomCode).emit('question_started', {
       question: room.currentQuestion.question,
       questionIndex,
-      answerLog: room.answerLog
+      answerLog: room.answerLog,
+      answerType: room.currentQuestion.answerType || 'text' // send answer type to clients
     });
 
     console.log(`Question ${questionIndex + 1} started in room ${roomCode}`);
@@ -304,6 +329,7 @@ io.on('connection', (socket) => {
 
     const submittedAnswer = answer.trim().toLowerCase();
     const correctAnswer = room.currentQuestion.answer;
+    const answerType = room.currentQuestion.answerType || 'text';
 
     // Check for multiple valid answers separated by '/' or 'or'
     let validAnswers = [correctAnswer];
@@ -313,7 +339,19 @@ io.on('connection', (socket) => {
       validAnswers = correctAnswer.split(' or ').map(a => a.trim());
     }
 
-    const isCorrect = validAnswers.includes(submittedAnswer);
+    let isCorrect = false;
+
+    // For numeric answers, compare as numbers (handles 34.5 == 34.50)
+    if (answerType === 'amount') {
+      const submittedNum = parseFloat(submittedAnswer);
+      isCorrect = validAnswers.some(validAns => {
+        const validNum = parseFloat(validAns);
+        return !isNaN(submittedNum) && !isNaN(validNum) && submittedNum === validNum;
+      });
+    } else {
+      // For text answers, use exact string matching (case-insensitive)
+      isCorrect = validAnswers.includes(submittedAnswer);
+    }
     const timestamp = Date.now();
 
     // Log the answer attempt

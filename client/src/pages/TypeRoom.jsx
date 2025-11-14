@@ -8,11 +8,14 @@ function TypeRoom({ roomCode, player, players: initialPlayers, gameState, onLeav
   const [questions, setQuestions] = useState([]);
   const [currentQuestion, setCurrentQuestion] = useState(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(-1);
+  const [currentQuestionAnswerType, setCurrentQuestionAnswerType] = useState('text');
   const [newQuestion, setNewQuestion] = useState('');
   const [newAnswer, setNewAnswer] = useState('');
+  const [newAnswerType, setNewAnswerType] = useState('text'); // default to text
   const [editingQuestion, setEditingQuestion] = useState(null);
   const [editQuestion, setEditQuestion] = useState('');
   const [editAnswer, setEditAnswer] = useState('');
+  const [editAnswerType, setEditAnswerType] = useState('text');
   const [playerAnswer, setPlayerAnswer] = useState('');
   const [hasAnswered, setHasAnswered] = useState(false);
   const [feedback, setFeedback] = useState(null);
@@ -21,6 +24,8 @@ function TypeRoom({ roomCode, player, players: initialPlayers, gameState, onLeav
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
   const [uploadError, setUploadError] = useState(null);
+  const [pendingUpload, setPendingUpload] = useState(null);
+  const [showUploadConfirm, setShowUploadConfirm] = useState(false);
 
   useEffect(() => {
     socket.on('question_added', ({ questions }) => {
@@ -35,9 +40,14 @@ function TypeRoom({ roomCode, player, players: initialPlayers, gameState, onLeav
       setQuestions(questions);
     });
 
-    socket.on('question_started', ({ question, questionIndex, answerLog }) => {
+    socket.on('questions_cleared', ({ questions }) => {
+      setQuestions(questions);
+    });
+
+    socket.on('question_started', ({ question, questionIndex, answerLog, answerType }) => {
       setCurrentQuestion(question);
       setCurrentQuestionIndex(questionIndex);
+      setCurrentQuestionAnswerType(answerType || 'text'); // default to text if not provided
       setPlayerAnswer('');
       setHasAnswered(false);
       setFeedback(null);
@@ -107,6 +117,7 @@ function TypeRoom({ roomCode, player, players: initialPlayers, gameState, onLeav
       socket.off('question_added');
       socket.off('question_updated');
       socket.off('question_deleted');
+      socket.off('questions_cleared');
       socket.off('question_started');
       socket.off('player_joined');
       socket.off('player_left');
@@ -129,17 +140,20 @@ function TypeRoom({ roomCode, player, players: initialPlayers, gameState, onLeav
     socket.emit('add_question', {
       roomCode,
       question: newQuestion.trim(),
-      answer: newAnswer.trim()
+      answer: newAnswer.trim(),
+      answerType: newAnswerType || 'text' // default to text if not set
     });
 
     setNewQuestion('');
     setNewAnswer('');
+    setNewAnswerType('text'); // reset to default
   };
 
   const handleEditQuestion = (question) => {
     setEditingQuestion(question.id);
     setEditQuestion(question.question);
     setEditAnswer(question.answer);
+    setEditAnswerType(question.answerType || 'text'); // default to text if not set
   };
 
   const handleSaveEdit = () => {
@@ -149,18 +163,21 @@ function TypeRoom({ roomCode, player, players: initialPlayers, gameState, onLeav
       roomCode,
       questionId: editingQuestion,
       question: editQuestion.trim(),
-      answer: editAnswer.trim()
+      answer: editAnswer.trim(),
+      answerType: editAnswerType || 'text' // default to text if not set
     });
 
     setEditingQuestion(null);
     setEditQuestion('');
     setEditAnswer('');
+    setEditAnswerType('text'); // reset to default
   };
 
   const handleCancelEdit = () => {
     setEditingQuestion(null);
     setEditQuestion('');
     setEditAnswer('');
+    setEditAnswerType('text'); // reset to default
   };
 
   const handleDeleteQuestion = (questionId) => {
@@ -223,20 +240,17 @@ function TypeRoom({ roomCode, player, players: initialPlayers, gameState, onLeav
           return;
         }
 
-        // Add all parsed questions
-        parsedQuestions.forEach(({ question, answer }) => {
-          socket.emit('add_question', {
-            roomCode,
-            question: question.trim(),
-            answer: answer.trim()
-          });
-        });
+        // Check if there are existing questions
+        if (questions.length > 0) {
+          // Show confirmation dialog
+          setPendingUpload(parsedQuestions);
+          setShowUploadConfirm(true);
+        } else {
+          // No existing questions, just add them
+          addQuestionsFromUpload(parsedQuestions, false);
+        }
 
         setUploadError(null);
-        // Reset file input
-        if (fileInputRef.current) {
-          fileInputRef.current.value = '';
-        }
       } catch (error) {
         setUploadError(error.message);
       }
@@ -247,6 +261,47 @@ function TypeRoom({ roomCode, player, players: initialPlayers, gameState, onLeav
     };
 
     reader.readAsText(file);
+  };
+
+  const addQuestionsFromUpload = (parsedQuestions, shouldOverwrite) => {
+    // If overwrite, clear existing questions first
+    if (shouldOverwrite) {
+      socket.emit('clear_questions', { roomCode });
+    }
+
+    // Add all parsed questions
+    parsedQuestions.forEach(({ question, answer, answerType }) => {
+      socket.emit('add_question', {
+        roomCode,
+        question: question.trim(),
+        answer: answer.trim(),
+        answerType: answerType || 'text' // default to text if not provided
+      });
+    });
+
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+
+    // Close confirmation dialog
+    setShowUploadConfirm(false);
+    setPendingUpload(null);
+  };
+
+  const handleUploadConfirm = (shouldOverwrite) => {
+    if (pendingUpload) {
+      addQuestionsFromUpload(pendingUpload, shouldOverwrite);
+    }
+  };
+
+  const handleUploadCancel = () => {
+    setShowUploadConfirm(false);
+    setPendingUpload(null);
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   const parseFileContent = (content, filename) => {
@@ -263,7 +318,11 @@ function TypeRoom({ roomCode, player, players: initialPlayers, gameState, onLeav
         if (!item.question || !item.answer) {
           throw new Error(`Invalid format at index ${index}: missing question or answer`);
         }
-        questions.push({ question: item.question, answer: item.answer });
+        questions.push({
+          question: item.question,
+          answer: item.answer,
+          answerType: item.answerType || 'text' // optional field, defaults to text
+        });
       });
     } else if (filename.endsWith('.csv')) {
       // CSV format: question,answer (with optional header)
@@ -282,9 +341,10 @@ function TypeRoom({ roomCode, player, players: initialPlayers, gameState, onLeav
 
         const question = parts[0].replace(/^"|"$/g, '').trim();
         const answer = parts[1].replace(/^"|"$/g, '').trim();
+        const answerType = parts[2] ? parts[2].replace(/^"|"$/g, '').trim() : 'text'; // optional third column
 
         if (question && answer) {
-          questions.push({ question, answer });
+          questions.push({ question, answer, answerType });
         }
       });
     } else {
@@ -405,6 +465,41 @@ function TypeRoom({ roomCode, player, players: initialPlayers, gameState, onLeav
             </div>
           </div>
 
+          {/* Upload Confirmation Dialog */}
+          {showUploadConfirm && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-2xl">
+                <h3 className="text-xl font-bold text-gray-800 mb-4">Questions Already Exist</h3>
+                <p className="text-gray-600 mb-6">
+                  You have {questions.length} existing question{questions.length !== 1 ? 's' : ''}.
+                  You are uploading {pendingUpload?.length} new question{pendingUpload?.length !== 1 ? 's' : ''}.
+                  <br /><br />
+                  How would you like to proceed?
+                </p>
+                <div className="flex flex-col space-y-3">
+                  <button
+                    onClick={() => handleUploadConfirm(false)}
+                    className="bg-blue-500 hover:bg-blue-600 text-white font-medium py-3 px-4 rounded-md transition duration-200"
+                  >
+                    Append ({questions.length + (pendingUpload?.length || 0)} total questions)
+                  </button>
+                  <button
+                    onClick={() => handleUploadConfirm(true)}
+                    className="bg-orange-500 hover:bg-orange-600 text-white font-medium py-3 px-4 rounded-md transition duration-200"
+                  >
+                    Overwrite (replace all with {pendingUpload?.length} new questions)
+                  </button>
+                  <button
+                    onClick={handleUploadCancel}
+                    className="bg-gray-500 hover:bg-gray-600 text-white font-medium py-3 px-4 rounded-md transition duration-200"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Question Display - Full Width and Prominent */}
           {currentQuestion && (
             <div className="mb-8">
@@ -488,6 +583,17 @@ function TypeRoom({ roomCode, player, players: initialPlayers, gameState, onLeav
                           placeholder="Enter correct answer..."
                           className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
                         />
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Answer Type (optional)</label>
+                          <select
+                            value={newAnswerType}
+                            onChange={(e) => setNewAnswerType(e.target.value)}
+                            className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          >
+                            <option value="text">Text</option>
+                            <option value="amount">Amount (Number)</option>
+                          </select>
+                        </div>
                         <button
                           onClick={handleAddQuestion}
                           disabled={!newQuestion.trim() || !newAnswer.trim()}
@@ -574,6 +680,17 @@ function TypeRoom({ roomCode, player, players: initialPlayers, gameState, onLeav
                                   placeholder="Edit answer..."
                                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
                                 />
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-700 mb-1">Answer Type</label>
+                                  <select
+                                    value={editAnswerType}
+                                    onChange={(e) => setEditAnswerType(e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                                  >
+                                    <option value="text">Text</option>
+                                    <option value="amount">Amount (Number)</option>
+                                  </select>
+                                </div>
                                 <div className="flex space-x-2">
                                   <button
                                     onClick={handleSaveEdit}
@@ -644,11 +761,13 @@ function TypeRoom({ roomCode, player, players: initialPlayers, gameState, onLeav
                     <div className="flex space-x-4">
                       <input
                         ref={inputRef}
-                        type="text"
+                        type={currentQuestionAnswerType === 'amount' ? 'number' : 'text'}
+                        inputMode={currentQuestionAnswerType === 'amount' ? 'numeric' : 'text'}
+                        pattern={currentQuestionAnswerType === 'amount' ? '[0-9]*' : undefined}
                         value={playerAnswer}
                         onChange={(e) => setPlayerAnswer(e.target.value)}
                         onKeyPress={(e) => e.key === 'Enter' && handleSubmitAnswer(inputRef)}
-                        placeholder="Type your answer here..."
+                        placeholder={currentQuestionAnswerType === 'amount' ? 'Enter number...' : 'Type your answer here...'}
                         disabled={hasAnswered}
                         className="flex-1 px-4 py-4 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-xl font-medium disabled:bg-gray-100"
                       />
