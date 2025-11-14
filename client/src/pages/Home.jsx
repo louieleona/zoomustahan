@@ -83,7 +83,7 @@ function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center p-6">
+    <div className="min-h-screen bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center p-6">
       <div className="bg-white rounded-lg shadow-xl p-10 w-full max-w-lg mx-4">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-800 mb-2">Zoomustahan</h1>
@@ -130,7 +130,7 @@ function Home() {
                 onClick={() => setRoomType('type')}
                 className={`p-4 border-2 rounded-lg transition duration-200 ${
                   roomType === 'type'
-                    ? 'border-purple-500 bg-purple-50 text-purple-700'
+                    ? 'border-blue-500 bg-blue-50 text-blue-700'
                     : 'border-gray-300 hover:border-gray-400'
                 }`}
                 disabled={loading}
@@ -173,19 +173,25 @@ function Home() {
             </label>
             <input
               type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
               id="roomCode"
               value={roomCode}
-              onChange={(e) => setRoomCode(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-lg"
-              placeholder="Enter room code"
+              onChange={(e) => {
+                const value = e.target.value.replace(/\D/g, ''); // Remove non-numeric characters
+                setRoomCode(value);
+              }}
+              className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg"
+              placeholder="Enter 6-digit room code"
               disabled={loading}
+              maxLength={6}
             />
           </div>
 
           <button
             onClick={handleJoinRoom}
             disabled={loading}
-            className="w-full bg-purple-500 hover:bg-purple-600 text-white font-medium py-4 px-4 rounded-md transition duration-200 disabled:opacity-50 text-lg"
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-4 px-4 rounded-md transition duration-200 disabled:opacity-50 text-lg"
           >
             {loading ? 'Joining...' : 'Join Room'}
           </button>

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import socket from '../services/socket';
 import AnswerChat from '../components/AnswerChat';
 import Podium from '../components/Podium';
+import { ArrowRightStartOnRectangleIcon, ClipboardDocumentIcon } from '@heroicons/react/24/outline';
 
 function TypeRoom({ roomCode, player, players: initialPlayers, gameState, onLeaveRoom }) {
   const [players, setPlayers] = useState(initialPlayers);
@@ -26,6 +27,7 @@ function TypeRoom({ roomCode, player, players: initialPlayers, gameState, onLeav
   const [uploadError, setUploadError] = useState(null);
   const [pendingUpload, setPendingUpload] = useState(null);
   const [showUploadConfirm, setShowUploadConfirm] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     socket.on('question_added', ({ questions }) => {
@@ -398,39 +400,54 @@ function TypeRoom({ roomCode, player, players: initialPlayers, gameState, onLeav
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-400 to-blue-500 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-400 to-blue-600 p-4">
       <div className="max-w-6xl mx-auto">
         <div className="bg-white rounded-lg shadow-xl p-6">
           {/* Header */}
-          <div className="flex justify-between items-center mb-6">
-            <div>
-              <div className="flex items-center space-x-3 mb-2">
-                <h1 className="text-2xl font-bold text-gray-800">Room: {roomCode}</h1>
+          <div className="mb-6 space-y-4">
+            {/* Room Code, Copy Button, and Leave Room */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-800">Room: {roomCode}</h1>
                 <button
-                  onClick={(event) => {
+                  onClick={() => {
                     const roomUrl = `${window.location.origin}/join/${roomCode}`;
                     navigator.clipboard.writeText(roomUrl);
-                    const button = event.target;
-                    const originalText = button.textContent;
-                    button.textContent = '✓';
+                    setCopied(true);
                     setTimeout(() => {
-                      button.textContent = originalText;
+                      setCopied(false);
                     }, 1000);
                   }}
-                  className="bg-gray-200 hover:bg-gray-300 text-gray-700 p-2 rounded-md transition duration-200"
+                  className="text-gray-600 hover:text-gray-800 p-2 transition duration-200"
                   title="Copy room link"
                 >
-                  📋
+                  {copied ? (
+                    <span className="text-green-600 font-bold">✓</span>
+                  ) : (
+                    <ClipboardDocumentIcon className="w-6 h-6" />
+                  )}
                 </button>
               </div>
-              <p className="text-gray-600">
-                Playing as: <span className="font-semibold">{player.name}</span>
-                {player.isHost && <span className="ml-2 text-purple-600">(Host)</span>}
-              </p>
-              <div className="mt-2">
-                <span className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${
-                  gameState === 'waiting' ? 'bg-yellow-100 text-yellow-800' :
-                  gameState === 'active' ? 'bg-green-100 text-green-800' :
+              {/* Leave Room - Heroicon for all views */}
+              <button
+                onClick={onLeaveRoom}
+                className="text-red-500 hover:text-red-700 p-2 transition duration-200"
+                title="Leave Room"
+              >
+                <ArrowRightStartOnRectangleIcon className="w-6 h-6" />
+              </button>
+            </div>
+
+            {/* Playing As and Game State */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                <p className="text-gray-600 text-sm sm:text-base">
+                  Playing as: <span className="font-semibold">{player.name}</span>
+                  {player.isHost && <span className="ml-2 text-blue-600">(Host)</span>}
+                </p>
+                <span className={`inline-block px-3 py-1 rounded-full text-sm font-medium w-fit ${
+                  gameState === 'waiting' ? 'bg-gray-100 text-gray-700' :
+                  gameState === 'active' ? 'bg-blue-100 text-blue-800' :
                   'bg-gray-100 text-gray-800'
                 }`}>
                   {gameState === 'waiting' ? '⏳ Waiting to Start' :
@@ -439,31 +456,51 @@ function TypeRoom({ roomCode, player, players: initialPlayers, gameState, onLeav
                 </span>
               </div>
             </div>
-            <div className="flex space-x-2">
-              {player.isHost && gameState === 'waiting' && (
+          </div>
+
+          {/* Fixed Bottom Action Button - Mobile Only */}
+          {player.isHost && gameState === 'waiting' && (
+            <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200 sm:hidden z-40">
+              <button
+                onClick={handleStartGame}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-md transition duration-200 font-medium text-lg"
+              >
+                Start Game
+              </button>
+            </div>
+          )}
+          {player.isHost && gameState === 'active' && (
+            <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200 sm:hidden z-40">
+              <button
+                onClick={handleEndGame}
+                className="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-md transition duration-200 font-medium text-lg"
+              >
+                End Game
+              </button>
+            </div>
+          )}
+
+          {/* Desktop Action Buttons */}
+          {player.isHost && (
+            <div className="hidden sm:flex gap-2 mb-6">
+              {gameState === 'waiting' && (
                 <button
                   onClick={handleStartGame}
-                  className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-md transition duration-200"
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition duration-200"
                 >
                   Start Game
                 </button>
               )}
-              {player.isHost && gameState === 'active' && (
+              {gameState === 'active' && (
                 <button
                   onClick={handleEndGame}
-                  className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-md transition duration-200"
+                  className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md transition duration-200"
                 >
                   End Game
                 </button>
               )}
-              <button
-                onClick={onLeaveRoom}
-                className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-md transition duration-200"
-              >
-                Leave Room
-              </button>
             </div>
-          </div>
+          )}
 
           {/* Upload Confirmation Dialog */}
           {showUploadConfirm && (
@@ -479,19 +516,19 @@ function TypeRoom({ roomCode, player, players: initialPlayers, gameState, onLeav
                 <div className="flex flex-col space-y-3">
                   <button
                     onClick={() => handleUploadConfirm(false)}
-                    className="bg-blue-500 hover:bg-blue-600 text-white font-medium py-3 px-4 rounded-md transition duration-200"
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-md transition duration-200"
                   >
                     Append ({questions.length + (pendingUpload?.length || 0)} total questions)
                   </button>
                   <button
                     onClick={() => handleUploadConfirm(true)}
-                    className="bg-orange-500 hover:bg-orange-600 text-white font-medium py-3 px-4 rounded-md transition duration-200"
+                    className="bg-red-600 hover:bg-red-700 text-white font-medium py-3 px-4 rounded-md transition duration-200"
                   >
                     Overwrite (replace all with {pendingUpload?.length} new questions)
                   </button>
                   <button
                     onClick={handleUploadCancel}
-                    className="bg-gray-500 hover:bg-gray-600 text-white font-medium py-3 px-4 rounded-md transition duration-200"
+                    className="border-2 border-gray-300 hover:bg-gray-50 text-gray-700 font-medium py-3 px-4 rounded-md transition duration-200"
                   >
                     Cancel
                   </button>
@@ -500,24 +537,11 @@ function TypeRoom({ roomCode, player, players: initialPlayers, gameState, onLeav
             </div>
           )}
 
-          {/* Question Display - Full Width and Prominent */}
-          {currentQuestion && (
+          {/* Question Display - Full Width and Prominent - Only show when game is active */}
+          {currentQuestion && gameState === 'active' && (
             <div className="mb-8">
-              <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg p-8 text-center shadow-xl">
+              <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg p-8 text-center shadow-xl">
                 <p className="text-4xl font-bold leading-relaxed">{currentQuestion}</p>
-              </div>
-            </div>
-          )}
-
-          {!currentQuestion && (
-            <div className="mb-8">
-              <div className="bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
-                <h2 className="text-2xl font-semibold text-gray-500 mb-2">
-                  {player.isHost ? 'Ready to Start' : 'Waiting for Question'}
-                </h2>
-                <p className="text-gray-600">
-                  {player.isHost ? 'Select a question to begin the round' : 'Host will start a question soon...'}
-                </p>
               </div>
             </div>
           )}
@@ -531,12 +555,12 @@ function TypeRoom({ roomCode, player, players: initialPlayers, gameState, onLeav
                 <>
                   {/* Question Setup (before/after game) */}
                   {gameState !== 'active' && (
-                    <div className="bg-purple-50 border border-purple-200 rounded-lg p-6">
-                      <h3 className="text-lg font-bold text-purple-800 mb-4">Add Questions</h3>
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-6">
+                      <h3 className="text-lg font-bold text-gray-800 mb-4">Add Questions</h3>
 
                       {/* File Upload Section */}
-                      <div className="mb-6 p-4 bg-white rounded-lg border border-purple-300">
-                        <h4 className="text-sm font-semibold text-purple-700 mb-2">Upload Questions File</h4>
+                      <div className="mb-6 p-4 bg-white rounded-lg border border-gray-300">
+                        <h4 className="text-sm font-semibold text-gray-700 mb-2">Upload Questions File</h4>
                         <p className="text-xs text-gray-600 mb-3">
                           Upload CSV, JSON, or TXT file. Supported formats:
                         </p>
@@ -555,7 +579,7 @@ function TypeRoom({ roomCode, player, players: initialPlayers, gameState, onLeav
                         />
                         <label
                           htmlFor="question-file-upload"
-                          className="block w-full bg-purple-600 hover:bg-purple-700 text-white text-center font-medium py-2 px-4 rounded-md cursor-pointer transition duration-200"
+                          className="block w-full bg-blue-600 hover:bg-blue-700 text-white text-center font-medium py-2 px-4 rounded-md cursor-pointer transition duration-200"
                         >
                           📁 Upload File
                         </label>
@@ -568,27 +592,27 @@ function TypeRoom({ roomCode, player, players: initialPlayers, gameState, onLeav
 
                       {/* Manual Add Section */}
                       <div className="space-y-4">
-                        <h4 className="text-sm font-semibold text-purple-700">Or Add Manually</h4>
+                        <h4 className="text-sm font-semibold text-gray-700">Or Add Manually</h4>
                         <input
                           type="text"
                           value={newQuestion}
                           onChange={(e) => setNewQuestion(e.target.value)}
                           placeholder="Enter question..."
-                          className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                         <input
                           type="text"
                           value={newAnswer}
                           onChange={(e) => setNewAnswer(e.target.value)}
                           placeholder="Enter correct answer..."
-                          className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-2">Answer Type (optional)</label>
                           <select
                             value={newAnswerType}
                             onChange={(e) => setNewAnswerType(e.target.value)}
-                            className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                            className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                           >
                             <option value="text">Text</option>
                             <option value="amount">Amount (Number)</option>
@@ -597,61 +621,10 @@ function TypeRoom({ roomCode, player, players: initialPlayers, gameState, onLeav
                         <button
                           onClick={handleAddQuestion}
                           disabled={!newQuestion.trim() || !newAnswer.trim()}
-                          className="w-full bg-purple-500 hover:bg-purple-600 disabled:bg-gray-400 text-white font-medium py-3 px-4 rounded-md transition duration-200"
+                          className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium py-3 px-4 rounded-md transition duration-200"
                         >
                           Add Question
                         </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Active Game Controls */}
-                  {gameState === 'active' && questions.length > 0 && (
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-                      <h3 className="text-lg font-bold text-blue-800 mb-4">Game Controls</h3>
-
-                      {/* Current Question Info */}
-                      <div className="mb-4 p-3 bg-white rounded-lg border">
-                        <p className="text-sm text-gray-600 mb-1">
-                          Question {Math.max(currentQuestionIndex + 1, 1)} of {questions.length}
-                        </p>
-                        {currentQuestionIndex >= 0 && (
-                          <div>
-                            <p className="font-medium">{questions[currentQuestionIndex]?.question}</p>
-                            <p className="text-sm text-gray-500">Answer: {questions[currentQuestionIndex]?.answer}</p>
-                            {!currentQuestion && (
-                              <p className="text-sm text-green-600 mt-1">✓ Question completed - ready for next</p>
-                            )}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Navigation Controls */}
-                      <div className="flex space-x-3">
-                        <button
-                          onClick={() => handleStartQuestion(currentQuestionIndex === -1 ? 0 : currentQuestionIndex)}
-                          disabled={questions.length === 0}
-                          className="flex-1 bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white font-medium py-3 px-4 rounded-md transition duration-200"
-                        >
-                          {currentQuestionIndex === -1 ? 'Start First Question' :
-                           currentQuestion ? 'Restart Current' : 'Repeat Question'}
-                        </button>
-
-                        <button
-                          onClick={handleNextQuestion}
-                          disabled={currentQuestionIndex >= questions.length - 1 || questions.length === 0}
-                          className="flex-1 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white font-medium py-3 px-4 rounded-md transition duration-200"
-                        >
-                          Next Question
-                        </button>
-                      </div>
-
-                      <div className="mt-3 text-center">
-                        <p className="text-sm text-gray-600">
-                          {currentQuestionIndex >= questions.length - 1 && questions.length > 0
-                            ? "This is the last question"
-                            : `${questions.length - currentQuestionIndex - 1} questions remaining`}
-                        </p>
                       </div>
                     </div>
                   )}
@@ -671,21 +644,21 @@ function TypeRoom({ roomCode, player, players: initialPlayers, gameState, onLeav
                                   value={editQuestion}
                                   onChange={(e) => setEditQuestion(e.target.value)}
                                   placeholder="Edit question..."
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                                 />
                                 <input
                                   type="text"
                                   value={editAnswer}
                                   onChange={(e) => setEditAnswer(e.target.value)}
                                   placeholder="Edit answer..."
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                                 />
                                 <div>
                                   <label className="block text-xs font-medium text-gray-700 mb-1">Answer Type</label>
                                   <select
                                     value={editAnswerType}
                                     onChange={(e) => setEditAnswerType(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                                   >
                                     <option value="text">Text</option>
                                     <option value="amount">Amount (Number)</option>
@@ -695,7 +668,7 @@ function TypeRoom({ roomCode, player, players: initialPlayers, gameState, onLeav
                                   <button
                                     onClick={handleSaveEdit}
                                     disabled={!editQuestion.trim() || !editAnswer.trim()}
-                                    className="bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white text-xs px-3 py-1 rounded transition duration-200"
+                                    className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white text-xs px-3 py-1 rounded transition duration-200"
                                   >
                                     Save
                                   </button>
@@ -735,17 +708,6 @@ function TypeRoom({ roomCode, player, players: initialPlayers, gameState, onLeav
                       </div>
                     </div>
                   )}
-
-                  {/* Simplified Question Counter during active game */}
-                  {questions.length > 0 && gameState === 'active' && (
-                    <div className="text-center p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                      <h3 className="text-lg font-semibold text-gray-800 mb-2">Question Bank</h3>
-                      <div className="text-sm text-gray-600">
-                        <p>{questions.length} questions total</p>
-                        <p>Currently on question {currentQuestionIndex + 1}</p>
-                      </div>
-                    </div>
-                  )}
                 </>
               )}
 
@@ -754,16 +716,61 @@ function TypeRoom({ roomCode, player, players: initialPlayers, gameState, onLeav
                 <AnswerChat answerLog={answerLog} currentPlayerId={player.id} />
               </div>
 
+              {/* Active Game Controls - For Host Only */}
+              {player.isHost && gameState === 'active' && questions.length > 0 && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+                  <h3 className="text-lg font-bold text-blue-800 mb-4">Game Controls</h3>
+
+                  {/* Current Question Info */}
+                  <div className="mb-4 p-3 bg-white rounded-lg border">
+                    <p className="text-sm text-gray-600 mb-1">
+                      Question {Math.max(currentQuestionIndex + 1, 1)} of {questions.length}
+                    </p>
+                    {currentQuestionIndex >= 0 && (
+                      <div>
+                        <p className="font-medium">{questions[currentQuestionIndex]?.question}</p>
+                        <p className="text-sm text-gray-500">Answer: {questions[currentQuestionIndex]?.answer}</p>
+                        {!currentQuestion && (
+                          <p className="text-sm text-green-600 mt-1">✓ Question completed - ready for next</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Navigation Controls */}
+                  <div className="flex space-x-3">
+                    <button
+                      onClick={() => handleStartQuestion(currentQuestionIndex === -1 ? 0 : currentQuestionIndex)}
+                      disabled={questions.length === 0}
+                      className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium py-3 px-4 rounded-md transition duration-200"
+                    >
+                      {currentQuestionIndex === -1 ? 'Start First Question' :
+                       currentQuestion ? 'Restart Current' : 'Repeat Question'}
+                    </button>
+
+                    <button
+                      onClick={handleNextQuestion}
+                      disabled={currentQuestionIndex >= questions.length - 1 || questions.length === 0}
+                      className="flex-1 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white font-medium py-3 px-4 rounded-md transition duration-200"
+                    >
+                      Next Question
+                    </button>
+                  </div>
+
+                 
+                </div>
+              )}
+
               {/* Answer Input Section - For Players Only */}
               {currentQuestion && !player.isHost && (
                 <div>
                   <div className="bg-white border-2 border-blue-200 rounded-lg p-6 shadow-lg">
-                    <div className="flex space-x-4">
+                    <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
                       <input
                         ref={inputRef}
                         type={currentQuestionAnswerType === 'amount' ? 'number' : 'text'}
-                        inputMode={currentQuestionAnswerType === 'amount' ? 'numeric' : 'text'}
-                        pattern={currentQuestionAnswerType === 'amount' ? '[0-9]*' : undefined}
+                        inputMode={currentQuestionAnswerType === 'amount' ? 'decimal' : 'text'}
+                        step={currentQuestionAnswerType === 'amount' ? 'any' : undefined}
                         value={playerAnswer}
                         onChange={(e) => setPlayerAnswer(e.target.value)}
                         onKeyPress={(e) => e.key === 'Enter' && handleSubmitAnswer(inputRef)}
@@ -774,7 +781,7 @@ function TypeRoom({ roomCode, player, players: initialPlayers, gameState, onLeav
                       <button
                         onClick={() => handleSubmitAnswer(inputRef)}
                         disabled={hasAnswered || !playerAnswer.trim()}
-                        className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white font-bold py-4 px-8 rounded-md transition duration-200 text-lg whitespace-nowrap"
+                        className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white font-bold py-4 px-8 rounded-md transition duration-200 text-lg whitespace-nowrap w-full sm:w-auto"
                       >
                         {hasAnswered ? 'Submitted!' : 'Submit'}
                       </button>
@@ -808,13 +815,13 @@ function TypeRoom({ roomCode, player, players: initialPlayers, gameState, onLeav
                                 {p.name}
                               </div>
                               {p.isHost && (
-                                <div className="text-xs text-purple-600">(Host)</div>
+                                <div className="text-xs text-blue-600">(Host)</div>
                               )}
                             </div>
 
                             {/* Points - 25% */}
                             <div className="flex-shrink-0">
-                              <div className="bg-purple-500 text-white text-xs px-2 py-1 rounded-full">
+                              <div className="bg-blue-600 text-white text-xs px-2 py-1 rounded-full">
                                 {p.score || 0}
                               </div>
                             </div>

@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import socket from '../services/socket';
 import Podium from '../components/Podium';
 import TypeRoom from './TypeRoom';
+import { ArrowRightStartOnRectangleIcon, ClipboardDocumentIcon } from '@heroicons/react/24/outline';
 
 function Room() {
   const location = useLocation();
@@ -17,6 +18,7 @@ function Room() {
   const [gameState, setGameState] = useState(location.state?.gameState || 'waiting');
   const [topPlayers, setTopPlayers] = useState([]);
   const [roomType, setRoomType] = useState(location.state?.roomType || 'buzzer');
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (!player || !roomCode) {
@@ -156,36 +158,51 @@ function Room() {
     <div className="min-h-screen bg-gradient-to-br from-green-400 to-blue-500 p-4">
       <div className="max-w-4xl mx-auto">
         <div className="bg-white rounded-lg shadow-xl p-6">
-          <div className="flex justify-between items-center mb-6">
-            <div>
-              <div className="flex items-center space-x-3 mb-2">
-                <h1 className="text-2xl font-bold text-gray-800">Room: {roomCode}</h1>
+          {/* Header */}
+          <div className="mb-6 space-y-4">
+            {/* Room Code, Copy Button, and Leave Room */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-800">Room: {roomCode}</h1>
                 <button
-                  onClick={(event) => {
+                  onClick={() => {
                     const roomUrl = `${window.location.origin}/join/${roomCode}`;
                     navigator.clipboard.writeText(roomUrl);
-                    // Optional: Show a brief success message
-                    const button = event.target;
-                    const originalText = button.textContent;
-                    button.textContent = '✓';
+                    setCopied(true);
                     setTimeout(() => {
-                      button.textContent = originalText;
+                      setCopied(false);
                     }, 1000);
                   }}
-                  className="bg-gray-200 hover:bg-gray-300 text-gray-700 p-2 rounded-md transition duration-200"
+                  className="text-gray-600 hover:text-gray-800 p-2 transition duration-200"
                   title="Copy room link"
                 >
-                  📋
+                  {copied ? (
+                    <span className="text-green-600 font-bold">✓</span>
+                  ) : (
+                    <ClipboardDocumentIcon className="w-6 h-6" />
+                  )}
                 </button>
               </div>
-              <p className="text-gray-600">
+              {/* Leave Room - Heroicon for all views */}
+              <button
+                onClick={handleLeaveRoom}
+                className="text-red-500 hover:text-red-700 p-2 transition duration-200"
+                title="Leave Room"
+              >
+                <ArrowRightStartOnRectangleIcon className="w-6 h-6" />
+              </button>
+            </div>
+
+            {/* Playing As and Game State */}
+            <div className="flex flex-col gap-3">
+              <p className="text-gray-600 text-sm sm:text-base">
                 Playing as: <span className="font-semibold">{player.name}</span>
                 {player.isHost && <span className="ml-2 text-blue-600">(Host)</span>}
               </p>
-              <div className="mt-2">
-                <span className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${
-                  gameState === 'waiting' ? 'bg-yellow-100 text-yellow-800' :
-                  gameState === 'active' ? 'bg-green-100 text-green-800' :
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                <span className={`inline-block px-3 py-1 rounded-full text-sm font-medium w-fit ${
+                  gameState === 'waiting' ? 'bg-gray-100 text-gray-700' :
+                  gameState === 'active' ? 'bg-blue-100 text-blue-800' :
                   'bg-gray-100 text-gray-800'
                 }`}>
                   {gameState === 'waiting' ? '⏳ Waiting to Start' :
@@ -193,37 +210,57 @@ function Room() {
                    '🏁 Game Ended'}
                 </span>
                 {gameState !== 'active' && (
-                  <span className="ml-2 text-sm text-gray-500">
+                  <span className="text-xs sm:text-sm text-gray-500">
                     (Buzzing enabled, but no points awarded)
                   </span>
                 )}
               </div>
             </div>
-            <div className="flex space-x-2">
-              {player.isHost && gameState === 'waiting' && (
+          </div>
+
+          {/* Fixed Bottom Action Button - Mobile Only */}
+          {player.isHost && gameState === 'waiting' && (
+            <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200 sm:hidden z-40">
+              <button
+                onClick={handleStartGame}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-md transition duration-200 font-medium text-lg"
+              >
+                Start Game
+              </button>
+            </div>
+          )}
+          {player.isHost && gameState === 'active' && (
+            <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200 sm:hidden z-40">
+              <button
+                onClick={handleEndGame}
+                className="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-md transition duration-200 font-medium text-lg"
+              >
+                End Game
+              </button>
+            </div>
+          )}
+
+          {/* Desktop Action Buttons */}
+          {player.isHost && (
+            <div className="hidden sm:flex gap-2 mb-6">
+              {gameState === 'waiting' && (
                 <button
                   onClick={handleStartGame}
-                  className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-md transition duration-200"
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition duration-200"
                 >
                   Start Game
                 </button>
               )}
-              {player.isHost && gameState === 'active' && (
+              {gameState === 'active' && (
                 <button
                   onClick={handleEndGame}
-                  className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-md transition duration-200"
+                  className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md transition duration-200"
                 >
                   End Game
                 </button>
               )}
-              <button
-                onClick={handleLeaveRoom}
-                className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-md transition duration-200"
-              >
-                Leave Room
-              </button>
             </div>
-          </div>
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-10 gap-8">
             {/* Left Column - Buzzer and Buzz Order (70%) */}
@@ -237,7 +274,7 @@ function Room() {
                     className={`w-48 h-48 rounded-full text-white font-bold text-2xl transition duration-200 ${
                       playerBuzzed
                         ? 'bg-red-500 cursor-not-allowed'
-                        : 'bg-yellow-500 hover:bg-yellow-600 active:scale-95 shadow-lg hover:shadow-xl'
+                        : 'bg-blue-600 hover:bg-blue-700 active:scale-95 shadow-lg hover:shadow-xl'
                     }`}
                   >
                     {playerBuzzed ? 'BUZZED!' : 'BUZZ'}
@@ -282,8 +319,8 @@ function Room() {
                             isMarked
                               ? 'bg-gray-100 border-gray-300 opacity-60'
                               : isNextToValidate && player.isHost && gameState === 'active' && roundActive
-                              ? 'bg-yellow-100 border-yellow-500 shadow-md'
-                              : 'bg-yellow-50 border-yellow-300'
+                              ? 'bg-blue-100 border-blue-500 shadow-md'
+                              : 'bg-gray-50 border-gray-300'
                           }`}
                         >
                           <div className="flex items-center space-x-3">
@@ -307,7 +344,7 @@ function Room() {
                                   disabled={!isNextToValidate}
                                   className={`w-8 h-8 rounded-full flex items-center justify-center transition duration-200 ${
                                     isNextToValidate
-                                      ? 'bg-green-500 hover:bg-green-600 text-white cursor-pointer'
+                                      ? 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer'
                                       : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                   }`}
                                   title={isNextToValidate ? 'Mark Correct' : 'Wait for previous answers first'}
