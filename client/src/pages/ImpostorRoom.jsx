@@ -16,6 +16,8 @@ function ImpostorRoom({ roomCode, player, players, gameState: initialGameState, 
   const [copied, setCopied] = useState(false);
   const [previewStream, setPreviewStream] = useState(null); // Preview before recording
   const [showQRDialog, setShowQRDialog] = useState(false);
+  const [qrCodeImage, setQrCodeImage] = useState(null);
+  const [qrLoading, setQrLoading] = useState(true);
 
   const videoRef = useRef(null);
   const previewVideoRef = useRef(null);
@@ -23,6 +25,37 @@ function ImpostorRoom({ roomCode, player, players, gameState: initialGameState, 
   const streamRef = useRef(null);
 
   useEffect(() => {
+    // Generate QR code when component mounts
+    const generateQRCode = async () => {
+      try {
+        const joinUrl = `${window.location.origin}/join/${roomCode}`;
+        const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(joinUrl)}`;
+
+        // Fetch the QR code image and convert to blob
+        const response = await fetch(qrApiUrl);
+        if (!response.ok) throw new Error('Failed to generate QR code');
+
+        const blob = await response.blob();
+        const dataUrl = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.readAsDataURL(blob);
+        });
+
+        setQrCodeImage(dataUrl);
+        setQrLoading(false);
+        console.log('QR code generated successfully');
+      } catch (error) {
+        console.error('Failed to generate QR code:', error);
+        setQrLoading(false);
+        // Fallback to direct API URL if fetch fails
+        const joinUrl = `${window.location.origin}/join/${roomCode}`;
+        setQrCodeImage(`https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(joinUrl)}`);
+      }
+    };
+
+    generateQRCode();
+
     // Socket event listeners
     socket.on('recording_started', ({ gameState: newState, maxDuration }) => {
       setGameState(newState);
@@ -270,10 +303,6 @@ function ImpostorRoom({ roomCode, player, players, gameState: initialGameState, 
     setShowQRDialog(false);
   };
 
-  // Generate join URL for QR code
-  const joinUrl = `${window.location.origin}/join/${roomCode}`;
-  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(joinUrl)}`;
-
   // Start preview camera for Players in waiting state
   const startPreview = async () => {
     console.log('startPreview called');
@@ -351,11 +380,27 @@ function ImpostorRoom({ roomCode, player, players, gameState: initialGameState, 
             </div>
 
             <div className="bg-white p-4 rounded-lg border-4 border-green-500 mb-4">
-              <img
-                src={qrCodeUrl}
-                alt="QR Code to join room"
-                className="w-full h-auto"
-              />
+              {qrLoading ? (
+                <div className="w-full h-96 flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-green-500 mx-auto mb-4"></div>
+                    <p className="text-gray-600">Generating QR Code...</p>
+                  </div>
+                </div>
+              ) : qrCodeImage ? (
+                <img
+                  src={qrCodeImage}
+                  alt="QR Code to join room"
+                  className="w-full h-auto"
+                />
+              ) : (
+                <div className="w-full h-96 flex items-center justify-center">
+                  <div className="text-center text-gray-600">
+                    <p className="mb-2">QR Code unavailable</p>
+                    <p className="text-sm">Please use room code: <span className="font-bold">{roomCode}</span></p>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="text-center mb-4">

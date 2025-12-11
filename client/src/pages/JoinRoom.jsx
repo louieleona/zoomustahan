@@ -19,6 +19,8 @@ function JoinRoom() {
     setLoading(true);
     setError('');
 
+    console.log('Joining room with role:', role);
+
     socket.connect();
 
     socket.emit('join_room', {
@@ -90,7 +92,11 @@ function JoinRoom() {
             </label>
             <div className="grid grid-cols-2 gap-4">
               <button
-                onClick={() => setRole('Player')}
+                type="button"
+                onClick={() => {
+                  console.log('Setting role to Player');
+                  setRole('Player');
+                }}
                 className={`p-4 border-2 rounded-lg transition duration-200 ${
                   role === 'Player'
                     ? 'border-green-500 bg-green-50 text-green-700'
@@ -105,7 +111,11 @@ function JoinRoom() {
                 </div>
               </button>
               <button
-                onClick={() => setRole('Voter')}
+                type="button"
+                onClick={() => {
+                  console.log('Setting role to Voter');
+                  setRole('Voter');
+                }}
                 className={`p-4 border-2 rounded-lg transition duration-200 ${
                   role === 'Voter'
                     ? 'border-purple-500 bg-purple-50 text-purple-700'

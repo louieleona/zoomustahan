@@ -111,6 +111,8 @@ io.on('connection', (socket) => {
   });
 
   socket.on('join_room', ({ roomCode, playerName, role }) => {
+    console.log(`[join_room] Player "${playerName}" joining room ${roomCode} with role: ${role}`);
+
     const room = rooms.get(roomCode);
 
     if (!room) {
@@ -132,6 +134,9 @@ io.on('connection', (socket) => {
       }
     }
 
+    const assignedRole = room.type === 'impostor' ? (role || 'Voter') : undefined;
+    console.log(`[join_room] Room type: ${room.type}, Assigned role: ${assignedRole}`);
+
     const newPlayer = {
       id: socket.id,
       name: playerName,
@@ -139,7 +144,7 @@ io.on('connection', (socket) => {
       buzzed: false,
       buzzTime: null,
       score: 0,
-      role: room.type === 'impostor' ? (role || 'Voter') : undefined
+      role: assignedRole
     };
 
     room.players.push(newPlayer);
