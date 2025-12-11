@@ -733,7 +733,7 @@ function ImpostorRoom({ roomCode, player, players, gameState: initialGameState, 
                   🕵️ Who is the Impostor?
                 </h2>
                 <p className="text-gray-600">
-                  Vote for who you think is the impostor!
+                  Vote for who you think the impostor is!
                 </p>
                 <p className="text-sm text-gray-500 mt-2">
                   Videos available: {videos.length}

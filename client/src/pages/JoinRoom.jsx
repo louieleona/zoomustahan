@@ -4,7 +4,7 @@ import socket from '../services/socket';
 
 function JoinRoom() {
   const [playerName, setPlayerName] = useState('');
-  const [role, setRole] = useState('Player'); // 'Player' or 'Voter' for impostor rooms
+  const [role, setRole] = useState('Voter'); // 'Player' or 'Voter' for impostor rooms - default to Voter
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
