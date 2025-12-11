@@ -165,13 +165,23 @@ function ImpostorRoom({ roomCode, player, players, gameState: initialGameState, 
       }
       setCountdown('Recording!');
 
-      // Determine supported mime type
-      let mimeType = 'video/webm;codecs=vp9';
-      if (!MediaRecorder.isTypeSupported(mimeType)) {
-        mimeType = 'video/webm;codecs=vp8';
-      }
-      if (!MediaRecorder.isTypeSupported(mimeType)) {
-        mimeType = 'video/webm';
+      // Determine supported mime type - try mobile-friendly formats first
+      const mimeTypes = [
+        'video/mp4',                    // Safari iOS/macOS
+        'video/webm;codecs=vp9,opus',   // Chrome/Firefox desktop
+        'video/webm;codecs=vp8,opus',   // Fallback
+        'video/webm;codecs=vp9',        // Chrome without audio
+        'video/webm;codecs=vp8',        // Fallback without audio
+        'video/webm'                    // Basic fallback
+      ];
+
+      let mimeType = 'video/webm'; // Final fallback
+      for (const type of mimeTypes) {
+        if (MediaRecorder.isTypeSupported(type)) {
+          mimeType = type;
+          console.log('Selected mime type:', mimeType);
+          break;
+        }
       }
 
       // Start MediaRecorder
@@ -187,6 +197,7 @@ function ImpostorRoom({ roomCode, player, players, gameState: initialGameState, 
         console.log('MediaRecorder stopped, chunks count:', chunks.length);
         const blob = new Blob(chunks, { type: mediaRecorder.mimeType });
         console.log('Blob created, size:', blob.size, 'type:', blob.type);
+        console.log('Original recording mime type:', mediaRecorder.mimeType);
 
         // Convert to base64
         const reader = new FileReader();
