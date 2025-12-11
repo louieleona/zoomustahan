@@ -15,6 +15,7 @@ function ImpostorRoom({ roomCode, player, players, gameState: initialGameState, 
   const [submissionCount, setSubmissionCount] = useState(0);
   const [copied, setCopied] = useState(false);
   const [previewStream, setPreviewStream] = useState(null); // Preview before recording
+  const [showQRDialog, setShowQRDialog] = useState(false);
 
   const videoRef = useRef(null);
   const previewVideoRef = useRef(null);
@@ -43,6 +44,19 @@ function ImpostorRoom({ roomCode, player, players, gameState: initialGameState, 
         videosCount: newVideos?.length,
         videos: newVideos
       });
+
+      // Check each video's data format
+      newVideos?.forEach((video, index) => {
+        console.log(`Video ${index} data check:`, {
+          id: video.id,
+          playerName: video.playerName,
+          mimeType: video.mimeType,
+          dataLength: video.videoData?.length,
+          dataPrefix: video.videoData?.substring(0, 50),
+          isDataURL: video.videoData?.startsWith('data:')
+        });
+      });
+
       setGameState(newState);
       setVideos(newVideos);
     });
@@ -147,18 +161,35 @@ function ImpostorRoom({ roomCode, player, players, gameState: initialGameState, 
         reader.onloadend = () => {
           console.log('Base64 conversion complete, length:', reader.result?.length);
 
+          // Fix the data URL: remove codecs from mime type
+          // FileReader creates: data:video/webm;codecs=vp9,opus;base64,XXX
+          // We need: data:video/webm;base64,XXX
+          let dataURL = reader.result;
+          const mimeType = blob.type.split(';')[0]; // Extract just "video/webm"
+
+          // Replace the malformed data URL prefix with correct one
+          if (dataURL.includes(';codecs=')) {
+            // Find where ";base64," appears and split there
+            const base64Index = dataURL.indexOf(';base64,');
+            if (base64Index !== -1) {
+              const base64Data = dataURL.substring(base64Index + 8); // Skip ";base64," (8 chars)
+              dataURL = `data:${mimeType};base64,${base64Data}`;
+              console.log('Fixed data URL format, new mime type:', mimeType);
+            }
+          }
+
           const videoData = {
             roomCode,
-            videoData: reader.result,
-            mimeType: blob.type,
+            videoData: dataURL,
+            mimeType: mimeType,
             duration
           };
 
           console.log('Emitting submit_video event:', {
             roomCode,
-            mimeType: blob.type,
+            mimeType: mimeType,
             duration,
-            dataLength: reader.result?.length
+            dataLength: dataURL?.length
           });
 
           socket.emit('submit_video', videoData);
@@ -231,6 +262,18 @@ function ImpostorRoom({ roomCode, player, players, gameState: initialGameState, 
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleShowQR = () => {
+    setShowQRDialog(true);
+  };
+
+  const handleCloseQR = () => {
+    setShowQRDialog(false);
+  };
+
+  // Generate join URL for QR code
+  const joinUrl = `${window.location.origin}/join/${roomCode}`;
+  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(joinUrl)}`;
+
   // Start preview camera for Players in waiting state
   const startPreview = async () => {
     console.log('startPreview called');
@@ -288,6 +331,50 @@ function ImpostorRoom({ roomCode, player, players, gameState: initialGameState, 
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-600 via-green-600 to-red-700 p-4 relative overflow-hidden">
+      {/* QR Code Dialog */}
+      {showQRDialog && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50"
+          onClick={handleCloseQR}
+        >
+          <div
+            className="bg-white rounded-2xl p-8 max-w-md mx-4 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-center mb-4">
+              <h3 className="text-2xl font-bold text-gray-800 mb-2">
+                Scan to Join! 📱
+              </h3>
+              <p className="text-gray-600">
+                Scan this QR code to join the room
+              </p>
+            </div>
+
+            <div className="bg-white p-4 rounded-lg border-4 border-green-500 mb-4">
+              <img
+                src={qrCodeUrl}
+                alt="QR Code to join room"
+                className="w-full h-auto"
+              />
+            </div>
+
+            <div className="text-center mb-4">
+              <p className="text-sm text-gray-600 mb-2">Room Code:</p>
+              <p className="text-3xl font-bold text-red-600">{roomCode}</p>
+            </div>
+
+            <div className="text-center">
+              <button
+                onClick={handleCloseQR}
+                className="bg-gradient-to-r from-red-500 to-green-600 hover:from-red-600 hover:to-green-700 text-white font-bold py-3 px-8 rounded-lg shadow-lg transition"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Snow Animation */}
       {snowflakes.map(flake => (
         <div
@@ -339,6 +426,17 @@ function ImpostorRoom({ roomCode, player, players, gameState: initialGameState, 
                   >
                     <ClipboardDocumentIcon className="w-5 h-5 text-green-700" />
                   </button>
+                  {player.isHost && (
+                    <button
+                      onClick={handleShowQR}
+                      className="p-2 rounded-md bg-blue-100 hover:bg-blue-200 transition"
+                      title="Show QR Code"
+                    >
+                      <svg className="w-5 h-5 text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                      </svg>
+                    </button>
+                  )}
                   {copied && <span className="text-sm text-green-600">Copied!</span>}
                 </div>
               </div>
@@ -574,15 +672,33 @@ function ImpostorRoom({ roomCode, player, players, gameState: initialGameState, 
             <div>
               <div className="text-center mb-6">
                 <h2 className="text-3xl font-bold text-gray-800 mb-2">
-                  🗳️ Vote for Your Favorite!
+                  🕵️ Who is the Impostor?
                 </h2>
                 <p className="text-gray-600">
-                  Click on a video to cast your vote
+                  Vote for who you think is the impostor!
+                </p>
+                <p className="text-sm text-gray-500 mt-2">
+                  Videos available: {videos.length}
                 </p>
               </div>
 
+              {videos.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-red-600 font-semibold">No videos received yet</p>
+                  <p className="text-gray-500 text-sm mt-2">Waiting for videos to load...</p>
+                </div>
+              ) : null}
+
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {videos.map((video) => (
+                {videos.map((video) => {
+                  console.log('Rendering video:', {
+                    id: video.id,
+                    playerName: video.playerName,
+                    hasData: !!video.videoData,
+                    dataPreview: video.videoData?.substring(0, 100),
+                    dataLength: video.videoData?.length
+                  });
+                  return (
                   <div
                     key={video.id}
                     className="bg-white rounded-lg shadow-lg p-4 border-4 border-green-500 hover:border-red-500 transition"
@@ -595,6 +711,14 @@ function ImpostorRoom({ roomCode, player, players, gameState: initialGameState, 
                       muted
                       playsInline
                       className="w-full h-48 object-cover rounded-lg mb-3"
+                      onError={(e) => {
+                        console.error('Video playback error for', video.playerName, e);
+                        console.log('Video data length:', video.videoData?.length);
+                        console.log('Video mime type:', video.mimeType);
+                      }}
+                      onLoadedData={() => {
+                        console.log('Video loaded successfully for', video.playerName);
+                      }}
                     />
 
                     {/* Player Name */}
@@ -631,18 +755,12 @@ function ImpostorRoom({ roomCode, player, players, gameState: initialGameState, 
                         {voteResults[video.id]?.percentage || 0}%
                       </div>
                       <div className="text-sm text-gray-600">
-                        {voteResults[video.id]?.count || 0} votes
+                        {voteResults[video.id]?.count || 0} {voteResults[video.id]?.count === 1 ? 'vote' : 'votes'}
                       </div>
-
-                      {/* Show who voted */}
-                      {voteResults[video.id]?.voters?.length > 0 && (
-                        <div className="text-xs text-gray-500 mt-1">
-                          {voteResults[video.id].voters.join(', ')}
-                        </div>
-                      )}
                     </div>
                   </div>
-                ))}
+                );
+                })}
               </div>
 
               {/* Host Controls */}
@@ -664,8 +782,9 @@ function ImpostorRoom({ roomCode, player, players, gameState: initialGameState, 
             <div>
               <div className="text-center mb-8">
                 <h2 className="text-4xl font-bold text-gray-800 mb-2">
-                  🏆 Final Results! 🏆
+                  🕵️ The Impostor Votes! 🎭
                 </h2>
+                <p className="text-gray-600">Here's who voters think is the impostor</p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -678,10 +797,11 @@ function ImpostorRoom({ roomCode, player, players, gameState: initialGameState, 
                         index === 0 ? 'border-yellow-400' : 'border-green-500'
                       }`}
                     >
-                      {/* Winner Badge */}
+                      {/* Top Suspect Badge */}
                       {index === 0 && (
                         <div className="text-center mb-2">
-                          <span className="text-4xl">👑</span>
+                          <span className="text-4xl">🎭</span>
+                          <p className="text-sm font-bold text-red-600">Most Suspected!</p>
                         </div>
                       )}
 
@@ -706,15 +826,8 @@ function ImpostorRoom({ roomCode, player, players, gameState: initialGameState, 
                           {voteResults[video.id]?.percentage || 0}%
                         </div>
                         <div className="text-lg text-gray-600 mt-1">
-                          {voteResults[video.id]?.count || 0} votes
+                          {voteResults[video.id]?.count || 0} {voteResults[video.id]?.count === 1 ? 'vote' : 'votes'}
                         </div>
-
-                        {/* Voters List */}
-                        {voteResults[video.id]?.voters?.length > 0 && (
-                          <div className="text-sm text-gray-500 mt-2">
-                            Voted by: {voteResults[video.id].voters.join(', ')}
-                          </div>
-                        )}
                       </div>
                     </div>
                   ))}
