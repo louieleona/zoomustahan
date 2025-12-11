@@ -207,12 +207,14 @@ function ImpostorRoom({ roomCode, player, players, gameState: initialGameState, 
 
           // Fix the data URL: remove codecs from mime type
           // FileReader creates: data:video/webm;codecs=vp9,opus;base64,XXX
-          // We need: data:video/webm;base64,XXX
+          // or: data:video/mp4; codecs=avc1.42000a,mp4a.40.2;base64,XXX
+          // We need: data:video/webm;base64,XXX or data:video/mp4;base64,XXX
           let dataURL = reader.result;
-          const mimeType = blob.type.split(';')[0]; // Extract just "video/webm"
+          const mimeType = blob.type.split(';')[0].trim(); // Extract just "video/webm" or "video/mp4"
 
           // Replace the malformed data URL prefix with correct one
-          if (dataURL.includes(';codecs=')) {
+          // Check for both ";codecs=" and "; codecs=" (with space)
+          if (dataURL.includes('codecs=') || dataURL.includes('codecs =')) {
             // Find where ";base64," appears and split there
             const base64Index = dataURL.indexOf(';base64,');
             if (base64Index !== -1) {
