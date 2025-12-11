@@ -8,7 +8,15 @@ const server = http.createServer(app);
 
 const allowedOrigin = process.env.CLIENT_URL || "http://localhost:5173";
 
+// Impostor Game Configuration
+const IMPOSTOR_CONFIG = {
+  MAX_VIDEOS: 5,
+  VIDEO_DURATION: 3000,  // 3 seconds - CHANGE THIS to increase duration
+  MAX_HTTP_BUFFER_SIZE: 10e6  // 10MB buffer for videos
+};
+
 const io = socketIo(server, {
+  maxHttpBufferSize: IMPOSTOR_CONFIG.MAX_HTTP_BUFFER_SIZE, // 10MB for video data
   cors: {
     origin: allowedOrigin,
     methods: ["GET", "POST"]
@@ -57,7 +65,7 @@ io.on('connection', (socket) => {
     const roomCode = generateRoomCode();
     const room = {
       id: roomCode,
-      type: roomType || 'buzzer', // 'buzzer' or 'type'
+      type: roomType || 'buzzer', // 'buzzer', 'type', or 'impostor'
       host: socket.id,
       players: [{
         id: socket.id,
@@ -65,7 +73,8 @@ io.on('connection', (socket) => {
         isHost: true,
         buzzed: false,
         buzzTime: null,
-        score: 0
+        score: 0,
+        role: undefined // Host has no role - just manages the game
       }],
       gameState: 'waiting', // 'waiting', 'active', 'ended'
       buzzOrder: [],
@@ -76,6 +85,17 @@ io.on('connection', (socket) => {
       currentQuestionIndex: -1,
       answerLog: []
     };
+
+    // Add impostor-specific properties
+    if (roomType === 'impostor') {
+      room.videos = [];
+      room.votes = {};
+      room.voteResults = {};
+      room.recordingComplete = new Set();
+      room.maxVideos = IMPOSTOR_CONFIG.MAX_VIDEOS;
+      room.maxDuration = IMPOSTOR_CONFIG.VIDEO_DURATION;
+      room.maxPlayers = IMPOSTOR_CONFIG.MAX_VIDEOS; // Max 5 Players
+    }
 
     rooms.set(roomCode, room);
     socket.join(roomCode);
@@ -90,7 +110,7 @@ io.on('connection', (socket) => {
     console.log(`Room ${roomCode} created by ${playerName}`);
   });
 
-  socket.on('join_room', ({ roomCode, playerName }) => {
+  socket.on('join_room', ({ roomCode, playerName, role }) => {
     const room = rooms.get(roomCode);
 
     if (!room) {
@@ -103,13 +123,23 @@ io.on('connection', (socket) => {
       return;
     }
 
+    // For impostor rooms, validate Player count
+    if (room.type === 'impostor' && role === 'Player') {
+      const currentPlayerCount = room.players.filter(p => p.role === 'Player').length;
+      if (currentPlayerCount >= room.maxPlayers) {
+        socket.emit('room_error', `Maximum ${room.maxPlayers} Players allowed. Join as Voter instead.`);
+        return;
+      }
+    }
+
     const newPlayer = {
       id: socket.id,
       name: playerName,
       isHost: false,
       buzzed: false,
       buzzTime: null,
-      score: 0
+      score: 0,
+      role: room.type === 'impostor' ? (role || 'Voter') : undefined
     };
 
     room.players.push(newPlayer);
@@ -495,6 +525,186 @@ io.on('connection', (socket) => {
     });
 
     console.log(`Game ended in room ${roomCode}`);
+  });
+
+  // Impostor Game specific events
+  socket.on('start_recording', (roomCode) => {
+    const room = rooms.get(roomCode);
+    if (!room || room.type !== 'impostor') return;
+
+    const player = room.players.find(p => p.id === socket.id);
+    if (!player || !player.isHost) return;
+
+    room.gameState = 'recording';
+    room.videos = [];
+    room.recordingComplete = new Set();
+
+    io.to(roomCode).emit('recording_started', {
+      gameState: 'recording',
+      maxDuration: room.maxDuration
+    });
+
+    console.log(`Recording started in room ${roomCode}`);
+  });
+
+  socket.on('submit_video', ({ roomCode, videoData, mimeType, duration }) => {
+    console.log(`[submit_video] Received from ${socket.id}, room: ${roomCode}, mimeType: ${mimeType}, duration: ${duration}, dataSize: ${videoData?.length || 0}`);
+
+    const room = rooms.get(roomCode);
+    if (!room || room.type !== 'impostor') {
+      console.log(`[submit_video] REJECTED: Invalid room or room type`);
+      return;
+    }
+    if (room.gameState !== 'recording') {
+      console.log(`[submit_video] REJECTED: Game state is ${room.gameState}, not recording`);
+      return;
+    }
+
+    const player = room.players.find(p => p.id === socket.id);
+    if (!player) {
+      console.log(`[submit_video] REJECTED: Player not found`);
+      return;
+    }
+    if (room.recordingComplete.has(socket.id)) {
+      console.log(`[submit_video] REJECTED: Player already submitted`);
+      return;
+    }
+
+    // Only Players can submit videos
+    if (player.role !== 'Player') {
+      console.log(`[submit_video] REJECTED: Player role is ${player.role}, not Player`);
+      return;
+    }
+
+    // Validate
+    if (duration > room.maxDuration) {
+      console.log(`[submit_video] REJECTED: Duration ${duration} exceeds max ${room.maxDuration}`);
+      return;
+    }
+    if (room.videos.length >= room.maxVideos) {
+      console.log(`[submit_video] REJECTED: Max videos ${room.maxVideos} reached`);
+      return;
+    }
+
+    // Store video
+    const video = {
+      id: `video_${Date.now()}_${socket.id}`,
+      playerId: socket.id,
+      playerName: player.name,
+      videoData,
+      mimeType,
+      duration,
+      timestamp: Date.now()
+    };
+
+    room.videos.push(video);
+    room.recordingComplete.add(socket.id);
+
+    // Count total Players (not Voters)
+    const totalPlayersCount = room.players.filter(p => p.role === 'Player').length;
+
+    io.to(roomCode).emit('video_submitted', {
+      playerName: player.name,
+      videoCount: room.videos.length,
+      totalPlayers: totalPlayersCount
+    });
+
+    console.log(`[submit_video] SUCCESS: Video submitted by ${player.name}, total videos: ${room.videos.length}/${totalPlayersCount}`);
+
+    // Auto-transition to voting if all Players have submitted
+    if (room.videos.length >= totalPlayersCount) {
+      room.gameState = 'voting';
+      io.to(roomCode).emit('voting_started', {
+        gameState: 'voting',
+        videos: room.videos.map(v => ({
+          id: v.id,
+          playerName: v.playerName,
+          videoData: v.videoData,
+          mimeType: v.mimeType
+        }))
+      });
+
+      console.log(`Voting started in room ${roomCode}`);
+    }
+  });
+
+  socket.on('submit_vote', ({ roomCode, videoId }) => {
+    const room = rooms.get(roomCode);
+    if (!room || room.type !== 'impostor') return;
+    if (room.gameState !== 'voting') return;
+
+    const player = room.players.find(p => p.id === socket.id);
+    if (!player) return;
+
+    // Only Voters can vote (not Players, not Host)
+    if (player.role !== 'Voter') return;
+    if (player.isHost) return; // Host cannot vote
+
+    // Store vote
+    room.votes[socket.id] = videoId;
+
+    // Calculate results
+    room.voteResults = {};
+    const totalVotes = Object.keys(room.votes).length;
+
+    room.videos.forEach(video => {
+      const voters = Object.entries(room.votes)
+        .filter(([_, votedId]) => votedId === video.id)
+        .map(([voterId, _]) => room.players.find(p => p.id === voterId)?.name);
+
+      room.voteResults[video.id] = {
+        count: voters.length,
+        percentage: totalVotes > 0 ? Math.round((voters.length / totalVotes) * 100) : 0,
+        voters
+      };
+    });
+
+    // Broadcast update
+    io.to(roomCode).emit('vote_update', {
+      videoId,
+      voterName: player.name,
+      voteResults: room.voteResults
+    });
+
+    console.log(`Vote submitted by ${player.name} in room ${roomCode}`);
+  });
+
+  socket.on('show_results', (roomCode) => {
+    const room = rooms.get(roomCode);
+    if (!room || room.type !== 'impostor') return;
+
+    const player = room.players.find(p => p.id === socket.id);
+    if (!player || !player.isHost) return;
+
+    room.gameState = 'results';
+
+    io.to(roomCode).emit('results_ready', {
+      gameState: 'results',
+      voteResults: room.voteResults
+    });
+
+    console.log(`Results shown in room ${roomCode}`);
+  });
+
+  socket.on('new_round', (roomCode) => {
+    const room = rooms.get(roomCode);
+    if (!room || room.type !== 'impostor') return;
+
+    const player = room.players.find(p => p.id === socket.id);
+    if (!player || !player.isHost) return;
+
+    // Reset game state for new round
+    room.gameState = 'waiting';
+    room.videos = [];
+    room.votes = {};
+    room.voteResults = {};
+    room.recordingComplete = new Set();
+
+    io.to(roomCode).emit('round_reset', {
+      gameState: 'waiting'
+    });
+
+    console.log(`New round started in room ${roomCode}`);
   });
 
   socket.on('disconnect', () => {

@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import socket from '../services/socket';
 import Podium from '../components/Podium';
 import TypeRoom from './TypeRoom';
+import ImpostorRoom from './ImpostorRoom';
 import { ArrowRightStartOnRectangleIcon, ClipboardDocumentIcon } from '@heroicons/react/24/outline';
 
 function Room() {
@@ -145,6 +146,19 @@ function Room() {
   if (roomType === 'type') {
     return (
       <TypeRoom
+        roomCode={roomCode}
+        player={player}
+        players={players}
+        gameState={gameState}
+        onLeaveRoom={handleLeaveRoom}
+      />
+    );
+  }
+
+  // Redirect to ImpostorRoom if it's an impostor room
+  if (roomType === 'impostor') {
+    return (
+      <ImpostorRoom
         roomCode={roomCode}
         player={player}
         players={players}

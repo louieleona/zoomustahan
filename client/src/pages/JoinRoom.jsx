@@ -4,6 +4,7 @@ import socket from '../services/socket';
 
 function JoinRoom() {
   const [playerName, setPlayerName] = useState('');
+  const [role, setRole] = useState('Player'); // 'Player' or 'Voter' for impostor rooms
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -22,7 +23,8 @@ function JoinRoom() {
 
     socket.emit('join_room', {
       roomCode: roomCode,
-      playerName: playerName.trim()
+      playerName: playerName.trim(),
+      role: role // Will be used for impostor rooms, ignored for others
     });
 
     socket.on('room_joined', ({ roomCode, player, players, roomType, gameState }) => {
@@ -79,6 +81,48 @@ function JoinRoom() {
               disabled={loading}
               autoFocus
             />
+          </div>
+
+          {/* Role Selection - shown for potential impostor rooms */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-3">
+              Your Role (for Impostor Game rooms)
+            </label>
+            <div className="grid grid-cols-2 gap-4">
+              <button
+                onClick={() => setRole('Player')}
+                className={`p-4 border-2 rounded-lg transition duration-200 ${
+                  role === 'Player'
+                    ? 'border-green-500 bg-green-50 text-green-700'
+                    : 'border-gray-300 hover:border-gray-400'
+                }`}
+                disabled={loading}
+              >
+                <div className="text-center">
+                  <div className="text-2xl mb-2">🎥</div>
+                  <div className="font-medium">Player</div>
+                  <div className="text-xs text-gray-600">Record video (Max 5)</div>
+                </div>
+              </button>
+              <button
+                onClick={() => setRole('Voter')}
+                className={`p-4 border-2 rounded-lg transition duration-200 ${
+                  role === 'Voter'
+                    ? 'border-purple-500 bg-purple-50 text-purple-700'
+                    : 'border-gray-300 hover:border-gray-400'
+                }`}
+                disabled={loading}
+              >
+                <div className="text-center">
+                  <div className="text-2xl mb-2">🗳️</div>
+                  <div className="font-medium">Voter</div>
+                  <div className="text-xs text-gray-600">Watch and vote only</div>
+                </div>
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 mt-2 text-center">
+              Role only applies to Impostor Game rooms
+            </p>
           </div>
 
           {error && (

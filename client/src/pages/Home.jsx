@@ -5,7 +5,7 @@ import socket from '../services/socket';
 function Home() {
   const [playerName, setPlayerName] = useState('');
   const [roomCode, setRoomCode] = useState('');
-  const [roomType, setRoomType] = useState('buzzer'); // 'buzzer' or 'type'
+  const [roomType, setRoomType] = useState('buzzer'); // 'buzzer', 'type', or 'impostor'
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -21,7 +21,10 @@ function Home() {
 
     socket.connect();
 
-    socket.emit('create_room', { playerName: playerName.trim(), roomType });
+    socket.emit('create_room', {
+      playerName: playerName.trim(),
+      roomType
+    });
 
     socket.on('room_created', ({ roomCode, player, roomType, gameState }) => {
       setLoading(false);
@@ -43,43 +46,13 @@ function Home() {
   };
 
   const handleJoinRoom = () => {
-    if (!playerName.trim()) {
-      setError('Please enter your name');
-      return;
-    }
-
     if (!roomCode.trim()) {
       setError('Please enter a room code');
       return;
     }
 
-    setLoading(true);
-    setError('');
-
-    socket.connect();
-
-    socket.emit('join_room', {
-      roomCode: roomCode.trim(),
-      playerName: playerName.trim()
-    });
-
-    socket.on('room_joined', ({ roomCode, player, players, roomType, gameState }) => {
-      setLoading(false);
-      navigate(`/room/${roomCode}`, {
-        state: {
-          player,
-          roomCode,
-          roomType,
-          gameState,
-          players
-        }
-      });
-    });
-
-    socket.on('room_error', (message) => {
-      setLoading(false);
-      setError(message);
-    });
+    // Navigate to JoinRoom page where role selection and name entry happens
+    navigate(`/join/${roomCode.trim()}`);
   };
 
   return (
@@ -110,7 +83,7 @@ function Home() {
             <label className="block text-sm font-medium text-gray-700 mb-3">
               Room Type
             </label>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <button
                 onClick={() => setRoomType('buzzer')}
                 className={`p-4 border-2 rounded-lg transition duration-200 ${
@@ -139,6 +112,21 @@ function Home() {
                   <div className="text-2xl mb-2">⌨️</div>
                   <div className="font-medium">Type Room</div>
                   <div className="text-xs text-gray-600">Type the correct answer</div>
+                </div>
+              </button>
+              <button
+                onClick={() => setRoomType('impostor')}
+                className={`p-4 border-2 rounded-lg transition duration-200 ${
+                  roomType === 'impostor'
+                    ? 'border-red-500 bg-red-50 text-red-700'
+                    : 'border-gray-300 hover:border-gray-400'
+                }`}
+                disabled={loading}
+              >
+                <div className="text-center">
+                  <div className="text-2xl mb-2">🎅</div>
+                  <div className="font-medium">Impostor Game</div>
+                  <div className="text-xs text-gray-600">Christmas video challenge</div>
                 </div>
               </button>
             </div>
@@ -190,10 +178,10 @@ function Home() {
 
           <button
             onClick={handleJoinRoom}
-            disabled={loading}
+            disabled={loading || !roomCode.trim()}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-4 px-4 rounded-md transition duration-200 disabled:opacity-50 text-lg"
           >
-            {loading ? 'Joining...' : 'Join Room'}
+            Continue
           </button>
         </div>
       </div>
