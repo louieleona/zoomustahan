@@ -18,13 +18,11 @@ function ImpostorRoom({ roomCode, player, players, gameState: initialGameState, 
   const [showQRDialog, setShowQRDialog] = useState(false);
   const [qrCodeImage, setQrCodeImage] = useState(null);
   const [qrLoading, setQrLoading] = useState(true);
-  const [cameraReady, setCameraReady] = useState(false);
 
   const videoRef = useRef(null);
   const previewVideoRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const streamRef = useRef(null);
-  const persistentStreamRef = useRef(null); // Keep stream alive between recordings
 
   useEffect(() => {
     // Generate QR code when component mounts
@@ -57,27 +55,6 @@ function ImpostorRoom({ roomCode, player, players, gameState: initialGameState, 
     };
 
     generateQRCode();
-
-    // Initialize camera for Players once on mount
-    const initializeCamera = async () => {
-      if (player.role === 'Player') {
-        try {
-          console.log('Initializing camera for Player...');
-          const stream = await navigator.mediaDevices.getUserMedia({
-            video: { width: 640, height: 480, facingMode: 'user' },
-            audio: true
-          });
-          persistentStreamRef.current = stream;
-          setCameraReady(true);
-          console.log('Camera initialized successfully');
-        } catch (err) {
-          console.error('Failed to initialize camera:', err);
-          setError('Camera permission denied. Please allow camera access to participate as a Player.');
-        }
-      }
-    };
-
-    initializeCamera();
 
     // Socket event listeners
     socket.on('recording_started', ({ gameState: newState, maxDuration }) => {
@@ -135,7 +112,6 @@ function ImpostorRoom({ roomCode, player, players, gameState: initialGameState, 
       setHasSubmitted(false);
       setSubmissionCount(0);
       setError('');
-      // Camera stream remains active, no need to re-request permission
     });
 
     return () => {
@@ -146,15 +122,12 @@ function ImpostorRoom({ roomCode, player, players, gameState: initialGameState, 
       socket.off('results_ready');
       socket.off('round_reset');
 
-      // Cleanup camera streams on unmount
+      // Cleanup camera streams if still active
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
       }
       if (previewStream) {
         previewStream.getTracks().forEach(track => track.stop());
-      }
-      if (persistentStreamRef.current) {
-        persistentStreamRef.current.getTracks().forEach(track => track.stop());
       }
     };
   }, [previewStream]);
@@ -166,20 +139,17 @@ function ImpostorRoom({ roomCode, player, players, gameState: initialGameState, 
       // Stop preview if running
       stopPreview();
 
-      // Use persistent stream instead of requesting permission again
-      let stream = persistentStreamRef.current;
-
-      // Fallback: if no persistent stream, request it
-      if (!stream) {
-        console.log('No persistent stream, requesting camera access...');
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: 640, height: 480, facingMode: 'user' },
-          audio: true
-        });
-        persistentStreamRef.current = stream;
-      } else {
-        console.log('Using persistent stream for recording');
+      // Check browser support
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setError('Your browser does not support video recording.');
+        return;
       }
+
+      // Request camera access
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 640, height: 480, facingMode: 'user' },
+        audio: true
+      });
 
       streamRef.current = stream;
 
@@ -277,8 +247,8 @@ function ImpostorRoom({ roomCode, player, players, gameState: initialGameState, 
           setError('Failed to process video: ' + err);
         };
 
-        // Don't stop the persistent stream - keep it for next round
-        // Just clear the recording ref
+        // Stop camera
+        stream.getTracks().forEach(track => track.stop());
         streamRef.current = null;
 
         // Clear preview
@@ -346,19 +316,22 @@ function ImpostorRoom({ roomCode, player, players, gameState: initialGameState, 
     setShowQRDialog(false);
   };
 
-  // Start preview camera for Players in waiting state - use persistent stream
-  const startPreview = () => {
+  // Start preview camera for Players in waiting state
+  const startPreview = async () => {
     console.log('startPreview called');
     try {
-      // Use the persistent stream that was initialized on mount
-      const stream = persistentStreamRef.current;
-
-      if (!stream) {
-        setError('Camera not initialized. Please refresh the page.');
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setError('Your browser does not support video recording.');
         return;
       }
 
-      console.log('Using persistent stream for preview');
+      console.log('Requesting camera access for preview...');
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 640, height: 480, facingMode: 'user' },
+        audio: false // No audio for preview
+      });
+
+      console.log('Preview stream obtained:', stream);
       setPreviewStream(stream);
 
       // Use a slight delay to ensure ref is ready
@@ -372,16 +345,21 @@ function ImpostorRoom({ roomCode, player, players, gameState: initialGameState, 
       }, 100);
     } catch (err) {
       console.error('Preview camera error:', err);
-      setError('Camera preview failed: ' + err.message);
+      if (err.name === 'NotAllowedError') {
+        setError('Camera permission denied. Please allow camera access.');
+      } else if (err.name === 'NotFoundError') {
+        setError('No camera found on your device.');
+      } else {
+        setError('Camera access failed: ' + err.message);
+      }
     }
   };
 
   const stopPreview = () => {
-    // Don't stop the persistent stream, just hide the preview
-    if (previewVideoRef.current) {
-      previewVideoRef.current.srcObject = null;
+    if (previewStream) {
+      previewStream.getTracks().forEach(track => track.stop());
+      setPreviewStream(null);
     }
-    setPreviewStream(null);
   };
 
   // Christmas snow animation
@@ -612,18 +590,11 @@ function ImpostorRoom({ roomCode, player, players, gameState: initialGameState, 
                 <div>
                   <div className="text-4xl mb-4">🎥 Position Yourself</div>
                   <p className="text-gray-700 mb-4">
-                    {cameraReady ? 'Preview your camera before recording starts' : 'Requesting camera permission...'}
+                    Preview your camera before recording starts
                   </p>
 
-                  {!cameraReady && (
-                    <div className="text-center py-4">
-                      <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-green-500 mx-auto mb-2"></div>
-                      <p className="text-sm text-gray-600">Initializing camera...</p>
-                    </div>
-                  )}
-
                   {/* Camera Preview */}
-                  {cameraReady && previewStream ? (
+                  {previewStream ? (
                     <div className="max-w-md mx-auto mb-4">
                       <video
                         ref={previewVideoRef}
@@ -639,7 +610,7 @@ function ImpostorRoom({ roomCode, player, players, gameState: initialGameState, 
                         Stop Preview
                       </button>
                     </div>
-                  ) : cameraReady ? (
+                  ) : (
                     <div>
                       <button
                         onClick={startPreview}
@@ -648,7 +619,7 @@ function ImpostorRoom({ roomCode, player, players, gameState: initialGameState, 
                         📷 Start Camera Preview
                       </button>
                     </div>
-                  ) : null}
+                  )}
 
                   {error && (
                     <div className="max-w-md mx-auto bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mt-4">
