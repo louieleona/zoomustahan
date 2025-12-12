@@ -12,11 +12,13 @@ const allowedOrigin = process.env.CLIENT_URL || "http://localhost:5173";
 const IMPOSTOR_CONFIG = {
   MAX_VIDEOS: 5,
   VIDEO_DURATION: 3000,  // 3 seconds - CHANGE THIS to increase duration
-  MAX_HTTP_BUFFER_SIZE: 10e6  // 10MB buffer for videos
+  MAX_HTTP_BUFFER_SIZE: 50e6  // 50MB buffer for videos (to support 100 voters)
 };
 
 const io = socketIo(server, {
-  maxHttpBufferSize: IMPOSTOR_CONFIG.MAX_HTTP_BUFFER_SIZE, // 10MB for video data
+  maxHttpBufferSize: IMPOSTOR_CONFIG.MAX_HTTP_BUFFER_SIZE, // 50MB for video data
+  pingTimeout: 60000, // 60 seconds
+  pingInterval: 25000, // 25 seconds
   cors: {
     origin: allowedOrigin,
     methods: ["GET", "POST"]
