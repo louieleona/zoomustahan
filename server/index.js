@@ -11,7 +11,7 @@ const allowedOrigin = process.env.CLIENT_URL || "http://localhost:5173";
 // Impostor Game Configuration
 const IMPOSTOR_CONFIG = {
   MAX_VIDEOS: 5,
-  VIDEO_DURATION: 5000,  // 5 seconds - CHANGE THIS to increase duration
+  VIDEO_DURATION: 3000,  // 3 seconds - CHANGE THIS to increase duration
   MAX_HTTP_BUFFER_SIZE: 50e6  // 50MB buffer for videos (to support 100 voters)
 };
 

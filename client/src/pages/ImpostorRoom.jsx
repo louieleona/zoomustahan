@@ -11,7 +11,7 @@ function ImpostorRoom({ roomCode, player, players, gameState: initialGameState, 
   const [countdown, setCountdown] = useState(null);
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [error, setError] = useState('');
-  const [videoDuration, setVideoDuration] = useState(3000);
+  const [videoDuration, setVideoDuration] = useState(3000); // 3 seconds default
   const [submissionCount, setSubmissionCount] = useState(0);
   const [copied, setCopied] = useState(false);
   const [previewStream, setPreviewStream] = useState(null); // Preview before recording
@@ -145,9 +145,14 @@ function ImpostorRoom({ roomCode, player, players, gameState: initialGameState, 
         return;
       }
 
-      // Request camera access
+      // Request camera access - use back camera on mobile with optimized settings
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 640, height: 480, facingMode: 'user' },
+        video: {
+          width: { ideal: 720 },
+          height: { ideal: 480 },
+          frameRate: { ideal: 30, max: 30 },
+          facingMode: 'environment'
+        },
         audio: true
       });
 
@@ -184,8 +189,11 @@ function ImpostorRoom({ roomCode, player, players, gameState: initialGameState, 
         }
       }
 
-      // Start MediaRecorder
-      const mediaRecorder = new MediaRecorder(stream, { mimeType });
+      // Start MediaRecorder with optimized bitrate for faster transmission
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType,
+        videoBitsPerSecond: 1000000 // 1 Mbps for faster transmission and smaller file size
+      });
       mediaRecorderRef.current = mediaRecorder;
 
       const chunks = [];
@@ -327,7 +335,12 @@ function ImpostorRoom({ roomCode, player, players, gameState: initialGameState, 
 
       console.log('Requesting camera access for preview...');
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 640, height: 480, facingMode: 'user' },
+        video: {
+          width: { ideal: 720 },
+          height: { ideal: 480 },
+          frameRate: { ideal: 30, max: 30 },
+          facingMode: 'environment'
+        },
         audio: false // No audio for preview
       });
 
@@ -669,7 +682,7 @@ function ImpostorRoom({ roomCode, player, players, gameState: initialGameState, 
                   <div>
                     {countdown && (
                       <div className="mb-6">
-                        <div className="text-8xl font-bold text-red-600 animate-pulse">
+                        <div className="text-6xl font-bold text-red-600 animate-pulse">
                           {countdown}
                         </div>
                       </div>
