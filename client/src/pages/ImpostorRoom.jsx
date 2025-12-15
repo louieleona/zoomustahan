@@ -18,6 +18,7 @@ function ImpostorRoom({ roomCode, player, players, gameState: initialGameState, 
   const [showQRDialog, setShowQRDialog] = useState(false);
   const [qrCodeImage, setQrCodeImage] = useState(null);
   const [qrLoading, setQrLoading] = useState(true);
+  const [cameraFacing, setCameraFacing] = useState('environment'); // 'environment' (rear) or 'user' (front)
 
   const videoRef = useRef(null);
   const previewVideoRef = useRef(null);
@@ -145,13 +146,13 @@ function ImpostorRoom({ roomCode, player, players, gameState: initialGameState, 
         return;
       }
 
-      // Request camera access - use back camera on mobile with optimized settings
+      // Request camera access - use selected camera with optimized settings
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           width: { ideal: 720 },
           height: { ideal: 480 },
           frameRate: { ideal: 30, max: 30 },
-          facingMode: 'environment'
+          facingMode: cameraFacing
         },
         audio: true
       });
@@ -339,7 +340,7 @@ function ImpostorRoom({ roomCode, player, players, gameState: initialGameState, 
           width: { ideal: 720 },
           height: { ideal: 480 },
           frameRate: { ideal: 30, max: 30 },
-          facingMode: 'environment'
+          facingMode: cameraFacing
         },
         audio: false // No audio for preview
       });
@@ -559,21 +560,11 @@ function ImpostorRoom({ roomCode, player, players, gameState: initialGameState, 
                 </div>
               </div>
 
-              {/* Voters */}
+              {/* Voters - just show count */}
               <div>
                 <p className="text-sm font-medium text-gray-600 mb-2">
-                  🗳️ Voters ({players.filter(p => p.role === 'Voter').length}):
+                  🗳️ Voters: {players.filter(p => p.role === 'Voter').length}
                 </p>
-                <div className="flex flex-wrap gap-2">
-                  {players.filter(p => p.role === 'Voter').map(p => (
-                    <span
-                      key={p.id}
-                      className="px-3 py-1 rounded-full text-sm bg-purple-100 text-purple-700"
-                    >
-                      {p.name}
-                    </span>
-                  ))}
-                </div>
               </div>
             </div>
           </div>
@@ -605,6 +596,47 @@ function ImpostorRoom({ roomCode, player, players, gameState: initialGameState, 
                   <p className="text-gray-700 mb-4">
                     Preview your camera before recording starts
                   </p>
+
+                  {/* Camera Selection */}
+                  <div className="max-w-md mx-auto mb-4">
+                    <p className="text-sm font-medium text-gray-700 mb-2">Select Camera:</p>
+                    <div className="flex gap-4 justify-center">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="camera"
+                          value="environment"
+                          checked={cameraFacing === 'environment'}
+                          onChange={(e) => {
+                            setCameraFacing(e.target.value);
+                            // Stop current preview to allow re-selection
+                            if (previewStream) {
+                              stopPreview();
+                            }
+                          }}
+                          className="w-4 h-4 text-green-600"
+                        />
+                        <span className="text-gray-700">📷 Rear Camera</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="camera"
+                          value="user"
+                          checked={cameraFacing === 'user'}
+                          onChange={(e) => {
+                            setCameraFacing(e.target.value);
+                            // Stop current preview to allow re-selection
+                            if (previewStream) {
+                              stopPreview();
+                            }
+                          }}
+                          className="w-4 h-4 text-green-600"
+                        />
+                        <span className="text-gray-700">🤳 Front Camera</span>
+                      </label>
+                    </div>
+                  </div>
 
                   {/* Camera Preview */}
                   {previewStream ? (
